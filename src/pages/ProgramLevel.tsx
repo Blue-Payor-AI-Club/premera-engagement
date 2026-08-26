@@ -13,17 +13,10 @@ import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import {
   Share2,
-  UserCog,
-  ArrowLeftRight,
-  Truck,
-  Building2,
-  ShieldCheck,
-  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   AlertTriangle,
   Flag,
-  type LucideIcon,
 } from 'lucide-react'
 import MilestoneTable from '../components/MilestoneTable'
 import SlideHeader from '../components/SlideHeader'
@@ -32,6 +25,7 @@ import StatusDot from '../components/StatusDot'
 import QuickFeedback from '../components/QuickFeedback'
 import { usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
+import { WORKSTREAM_ICON_COMPONENTS } from '../data/workstreamIcons'
 import { STATUS, type StatusKey } from '../data/status'
 
 ModuleRegistry.registerModules([AllCommunityModule])
@@ -59,15 +53,7 @@ const ExpandContext = createContext<(id: string) => void>(() => {})
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ICONS: Record<WorkstreamIcon, LucideIcon> = {
-  share2: Share2,
-  userCog: UserCog,
-  arrowLeftRight: ArrowLeftRight,
-  truck: Truck,
-  building2: Building2,
-  shieldCheck: ShieldCheck,
-  clipboardCheck: ClipboardCheck,
-}
+const ICONS = WORKSTREAM_ICON_COMPONENTS
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 

@@ -11,6 +11,10 @@ interface Props {
   headTextColor?: string
   sectionColor?: string
   sectionTextColor?: string
+  /** Set false to hide the Feedback column/vote control — used by the Admin preview,
+   * which renders the whole document at once and shouldn't fire a vote-fetch per row
+   * or let an admin cast votes from a read-only preview. */
+  showFeedback?: boolean
 }
 
 export default function MilestoneTable({
@@ -21,7 +25,10 @@ export default function MilestoneTable({
   headTextColor = '#ffffff',
   sectionColor = '#eceadb',
   sectionTextColor = '#334155',
+  showFeedback = true,
 }: Props) {
+  const columnCount = showFeedback ? 5 : 4
+
   return (
     <div>
       {/* ---- Desktop / tablet table ---- */}
@@ -32,14 +39,14 @@ export default function MilestoneTable({
             <th className="text-left font-semibold px-3 py-2 w-24">Due Date</th>
             <th className="text-left font-semibold px-3 py-2 w-24">Revised Date</th>
             <th className="text-center font-semibold px-3 py-2 w-14">{statusLabel}</th>
-            <th className="text-center font-semibold px-3 py-2 w-20">Feedback</th>
+            {showFeedback && <th className="text-center font-semibold px-3 py-2 w-20">Feedback</th>}
           </tr>
         </thead>
         <tbody>
           {sections.map((section) => (
             <Fragment key={section.id}>
               <tr style={{ background: sectionColor }}>
-                <td colSpan={5} className="px-3 py-1.5 font-semibold text-[13px]" style={{ color: sectionTextColor }}>
+                <td colSpan={columnCount} className="px-3 py-1.5 font-semibold text-[13px]" style={{ color: sectionTextColor }}>
                   {section.title}
                 </td>
               </tr>
@@ -51,9 +58,11 @@ export default function MilestoneTable({
                   <td className="px-3 py-1.5 text-center">
                     <StatusDot status={row.status} />
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <QuickFeedback itemId={row.id} itemLabel={row.label} />
-                  </td>
+                  {showFeedback && (
+                    <td className="px-3 py-1.5 text-center">
+                      <QuickFeedback itemId={row.id} itemLabel={row.label} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </Fragment>
@@ -84,7 +93,7 @@ export default function MilestoneTable({
                 </div>
                 <div className="flex items-center gap-1 shrink-0 pt-0.5">
                   <StatusDot status={row.status} />
-                  <QuickFeedback itemId={row.id} itemLabel={row.label} />
+                  {showFeedback && <QuickFeedback itemId={row.id} itemLabel={row.label} />}
                 </div>
               </div>
             ))}

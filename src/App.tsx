@@ -383,7 +383,7 @@ function TopBar() {
           </div>
           <NavLink
             to="/admin"
-            title="Admin · Push Data"
+            title="Admin · Excel Sync"
             className={({ isActive }) =>
               `inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition ${
                 isActive ? 'bg-[#e7f1fa] text-[#0067b1]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'

@@ -3,17 +3,34 @@ import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { apiFetch } from '../lib/api'
 import { useAuth } from './AuthContext'
 
-const STORAGE_KEY = 'ustpremera_portaldata_v6'
+// Bumped from _v6: the document shape gained statusMessage/needsPremeraAttention/
+// milestones (Workstream) and severity/priority (IssueRow) fields, and — separately —
+// portal data is now Excel-sourced rather than admin-edited, so a stale pre-sync cache
+// from before this change shouldn't silently reappear on first load.
+const STORAGE_KEY = 'ustpremera_portaldata_v7'
 
 interface Ctx {
   data: PortalData
   loading: boolean
   error: string | null
-  save: (next: PortalData) => void
+  /** Re-runs the GET /portal fetch — used after a successful Excel sync/rollback
+   * (the import endpoint returns a change report, not the document itself, so the
+   * SPA re-fetches to pick up the new data + ETag) and by a manual "reload" action. */
+  refresh: () => void
+  /**
+   * Whole-document PUT. Not part of the normal Excel-sync workflow (nothing in the UI
+   * calls this on the happy path) — kept only as a "break glass" restore-from-JSON-backup
+   * path in Admin, since a backup you can't restore isn't a backup.
+   */
+  replaceDocument: (next: PortalData) => void
   reset: () => void
 }
 
 const PortalDataContext = createContext<Ctx | null>(null)
+
+// Exported (not just the hook) so tests can inject a value directly instead of
+// mocking apiFetch and fighting the mount effect — see PortalDataContext.test.tsx.
+export { PortalDataContext }
 
 function loadCache(): PortalData {
   try {
@@ -34,9 +51,7 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [etag, setEtag]   = useState<string | null>(null)
 
-  // Fetch from API once auth is resolved; re-fetch if token changes
-  useEffect(() => {
-    if (authLoading) return
+  const fetchDocument = useCallback(() => {
     setLoading(true)
     apiFetch('/portal')
       .then(async res => {
@@ -49,10 +64,17 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [authLoading, token])
+  }, [])
 
-  // Optimistically update local state; persist to API in background
-  const save = useCallback((next: PortalData) => {
+  // Fetch from API once auth is resolved; re-fetch if token changes
+  useEffect(() => {
+    if (authLoading) return
+    fetchDocument()
+  }, [authLoading, token, fetchDocument])
+
+  // Optimistically update local state; persist to API in background. Break-glass
+  // only — see the Ctx.replaceDocument doc comment.
+  const replaceDocument = useCallback((next: PortalData) => {
     setData(next)
     persist(next)
     const headers: Record<string, string> = {}
@@ -77,15 +99,17 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
         persist(json)
         setError(null)
       })
-      .catch(() => {
-        setData(DEFAULT_PORTAL_DATA)
-        persist(DEFAULT_PORTAL_DATA)
+      .catch((err: Error) => {
+        // Previously this claimed success locally (setting DEFAULT_PORTAL_DATA) even
+        // when the server call failed, which lies to the admin about what actually
+        // happened server-side. Surface the failure instead; local state is untouched.
+        setError(err.message)
       })
   }, [])
 
   const value = useMemo(
-    () => ({ data, loading, error, save, reset }),
-    [data, loading, error, save, reset],
+    () => ({ data, loading, error, refresh: fetchDocument, replaceDocument, reset }),
+    [data, loading, error, fetchDocument, replaceDocument, reset],
   )
   return <PortalDataContext.Provider value={value}>{children}</PortalDataContext.Provider>
 }

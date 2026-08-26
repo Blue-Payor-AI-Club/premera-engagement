@@ -189,7 +189,8 @@ export default function Risks() {
     ...data.program.bpo.issues,
   ], [data])
 
-  // Always derive from live context so modal reflects saves immediately
+  // Derive from live context (not a snapshot) so the open modal reflects a fresh
+  // Excel sync immediately rather than showing stale data from when it was opened.
   const selectedIssue = useMemo(() =>
     selectedId ? (allIssues.find(r => r.id === selectedId) ?? null) : null,
     [selectedId, allIssues]

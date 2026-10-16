@@ -218,3 +218,31 @@ git pull && docker compose up -d --build
 npm run build
 rsync -avz --delete dist/ user@server:/var/www/premera-portal
 ```
+
+---
+
+## Sign-in, roles and first-time setup
+
+The portal no longer logs everyone in automatically. Users sign in with their work email and a
+one-time code (sent by the API's mail relay). The API repo (`premera-engagement-api`) owns all of
+the configuration — see its `.env.example` and README. What matters for a deployment:
+
+1. **Seed the first Super Admin** on the API with `SUPERADMIN_BOOTSTRAP_EMAILS=you@ust.com`. Until
+   at least one Super Admin exists, nobody can get in.
+2. **`APP_BASE_URL` on the API must be this site's public URL** — invite and notification emails link here.
+3. **`VITE_API_BASE_URL`** (`.env.production`) must point at the API, as before.
+4. The web app and API must be served so the API sees real client IPs (`TRUST_PROXY` on the API),
+   otherwise the sign-in rate limit applies to the proxy as a whole.
+
+| Role | What they see |
+|---|---|
+| **UST Super Admin** | Everything, including **Super Admin** (users, access requests, invitations, email notification recipients, email log) |
+| **UST Stakeholder** | The whole portal, **Data Sync** (Excel upload/download/rollback) and **Activity** — no Super Admin page |
+| **Premera Stakeholder** | Program Level, Risks & Issues, Feedback (submit feedback, thumbs up/down) — read-only, no Data Sync / Activity / Super Admin |
+
+New people get access in one of two ways: they sign in with an unregistered email and **request
+access** (a Super Admin approves it and picks their role), or a Super Admin **invites** them by email.
+
+The menu hides what a role can't use, but that is only presentation — the API enforces every
+permission on every request.
+

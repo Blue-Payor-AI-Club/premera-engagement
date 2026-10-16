@@ -55,13 +55,14 @@ const TOUR_STEPS = [
     selector: '[data-tour="tab-switcher"]',
     placement: 'bottom' as const,
     icon: <LayoutGrid size={20} className="text-[#0067b1]" />,
-    label: 'ITO & BPO',
-    title: 'ITO & BPO Divisions',
-    body: 'The engagement is split into two program divisions. Click either tab to switch your view.',
+    label: 'ITO, BPO & Transition',
+    title: 'ITO, BPO & Transition',
+    body: 'The engagement is split into two program divisions, plus a Transition view. Click a tab to switch your view.',
     highlights: [
       { color: '#0067b1', text: 'ITO — Infrastructure & Technology Operations workstreams' },
       { color: '#0067b1', text: 'BPO — Business Process Operations workstreams' },
       { color: '#1aa260', text: 'Each division has its own workstreams, milestones, and issues' },
+      { color: '#0067b1', text: 'Transition — executive summary and dashboard for the transition program' },
     ],
   },
   {

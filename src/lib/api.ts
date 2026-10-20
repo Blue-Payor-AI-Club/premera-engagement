@@ -81,6 +81,16 @@ export interface ExcelImportSummary {
   milestoneRows: number
   issues: number
   riskActions: number
+  /** Optional: absent from an API that predates the Transition sheets. */
+  transition?: { dashboardRows: number; raidItems: number }
+}
+
+export interface ExcelMergeInfo {
+  baseVersion: number
+  currentVersion: number
+  /** People who updated the portal in between; their changes were kept. */
+  changedBy: string[]
+  yourChanges: number
 }
 
 export interface ExcelIdChanges {
@@ -100,6 +110,9 @@ export interface ExcelImportResult {
   unchanged: boolean
   dryRun: boolean
   summary?: ExcelImportSummary
+  /** Set when the workbook was built on an older version than the portal had reached, and its
+   * changes were merged with the changes made since instead of replacing them. */
+  merge?: ExcelMergeInfo
   ids?: ExcelIdChanges
   orphanedVotes?: ExcelOrphanedVotes
   warnings: ExcelProblem[]

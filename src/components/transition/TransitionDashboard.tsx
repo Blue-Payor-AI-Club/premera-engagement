@@ -28,8 +28,8 @@ function Notes({ row }: { row: DashboardRow }): ReactNode {
   if (!row.notes?.length) return null
   return (
     <ul className="list-disc pl-4 space-y-1 marker:text-slate-500">
-      {row.notes.map((n) => (
-        <li key={n.text} className={n.alert ? 'text-red-600' : undefined}>{n.text}</li>
+      {row.notes.map((n, i) => (
+        <li key={i} className={n.alert ? 'text-red-600' : undefined}>{n.text}</li>
       ))}
     </ul>
   )
@@ -61,7 +61,7 @@ function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => {
+          {groups.map((group, g) => {
             let notesCoveredFor = 0 // rows still hidden under a merged Notes cell
             return group.rows.map((row, i) => {
               const bg = stripe++ % 2 === 0 ? 'bg-white' : STRIPE_ODD
@@ -70,7 +70,7 @@ function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
               const rendersNotesCell = showNotes
               if (notesCoveredFor > 0) notesCoveredFor--
               return (
-                <tr key={`${group.tower}:${row.workstream}`} className={bg} data-stripe={bg === 'bg-white' ? 'even' : 'odd'}>
+                <tr key={`${g}:${i}`} className={bg} data-stripe={bg === 'bg-white' ? 'even' : 'odd'}>
                   {i === 0 && (
                     <th scope="rowgroup" rowSpan={group.rows.length} className={`${td} bg-white text-left font-bold text-[#10285c]`}>
                       {group.tower}
@@ -114,12 +114,12 @@ function RaidTable({ items }: { items: TransitionData['raid'] }) {
         </thead>
         <tbody>
           {items.map((r, i) => (
-            <tr key={r.description} className={i % 2 === 0 ? 'bg-white' : STRIPE_ODD}>
+            <tr key={i} className={i % 2 === 0 ? 'bg-white' : STRIPE_ODD}>
               <td className={`${td} text-center font-semibold`}>{r.type}</td>
               <td className={`${td} text-[12px] align-top`}>{r.description}</td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.mitigation.length > 1 ? (
-                  <ul className="list-disc pl-4 space-y-1">{r.mitigation.map((m) => <li key={m}>{m}</li>)}</ul>
+                  <ul className="list-disc pl-4 space-y-1">{r.mitigation.map((m, j) => <li key={j}>{m}</li>)}</ul>
                 ) : (
                   r.mitigation[0]
                 )}

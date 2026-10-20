@@ -4,6 +4,7 @@
 // shape the backend API is expected to serve (see /API.md).
 
 import type { StatusKey } from './status'
+import type { TransitionData } from './transitionData'
 
 export const uid = (): string =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -99,6 +100,10 @@ export interface PortalData {
     keyActivities: MilestoneSection[]
     issues: IssueRow[]
   }
+  /** The Transition tab of /program. Synced from the Excel workbook like everything else.
+   * Optional only so a response from an API that predates it (or a stale cached copy) falls
+   * back to the bundled TRANSITION_DATA instead of breaking the page. */
+  transition?: TransitionData
 }
 
 const fill = (text: string, n: number) => Array.from({ length: n }, () => text)

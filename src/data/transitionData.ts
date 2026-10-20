@@ -4,9 +4,11 @@ import type { StatusKey } from './status'
 // Transition tab of /program. Transcribed verbatim from the source slides (as of 10/08/26),
 // including dates exactly as printed there.
 //
-// NOTE: unlike the ITO/BPO tabs this is NOT part of PortalData, so it is not editable
-// through the Excel sync — updating it today means editing this file. Moving it into the
-// API/workbook is a deliberate follow-up, not an oversight.
+// The live data comes from the API (PortalData.transition), edited through the Excel sync's
+// Transition* sheets like every other tab. This constant is only the FALLBACK shown when
+// the API response has no transition block — keep it in step with the API's seed
+// (premera-engagement-api/src/seed/defaultTransition.ts). Do not edit it to change what
+// users see; change the workbook.
 
 export interface TransitionContact {
   role: string

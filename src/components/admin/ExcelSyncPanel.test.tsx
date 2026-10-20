@@ -142,6 +142,98 @@ describe('ExcelSyncPanel', () => {
     expect(screen.getByRole('button', { name: /download updated workbook/i })).toBeInTheDocument()
   })
 
+  it('tells the uploader when their workbook was merged with newer changes by someone else, and who', async () => {
+    vi.mocked(api.uploadPortalExcel).mockResolvedValue(
+      successResult({ version: 12, merge: { baseVersion: 10, currentVersion: 11, changedBy: ['dev.lead@ust.com'], yourChanges: 4 } }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+
+    const notice = await screen.findByText(/merged with newer changes/i)
+    const box = notice.closest('div')!.parentElement!
+    expect(box).toHaveTextContent('downloaded at version 10')
+    expect(box).toHaveTextContent('moved to version 11')
+    expect(box).toHaveTextContent('dev.lead@ust.com updated it since')
+    expect(box).toHaveTextContent('Your 4 changes were applied on top of theirs, and theirs were kept')
+    // Their copy of the workbook is now behind, so they're pointed at the fresh one.
+    expect(screen.getByRole('button', { name: /download updated workbook/i })).toBeInTheDocument()
+  })
+
+  it('a merge preview says what WOULD happen and offers no download yet', async () => {
+    vi.mocked(api.uploadPortalExcel).mockResolvedValue(
+      successResult({ dryRun: true, merge: { baseVersion: 3, currentVersion: 5, changedBy: ['a@ust.com', 'b@ust.com'], yourChanges: 1 } }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /preview/i }))
+
+    expect(await screen.findByText(/this would merge with newer changes/i)).toBeInTheDocument()
+    expect(screen.getByText(/a@ust.com, b@ust.com updated it since/)).toBeInTheDocument()
+    expect(screen.getByText(/Your 1 change would be applied/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /download updated workbook/i })).toBeNull()
+  })
+
+  it('no merge notice for an ordinary upload', async () => {
+    vi.mocked(api.uploadPortalExcel).mockResolvedValue(successResult())
+    const user = userEvent.setup()
+    renderPanel()
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+    await screen.findByText(/sync complete/i)
+    expect(screen.queryByText(/merged with newer changes/i)).toBeNull()
+  })
+
+  it('shows a same-field conflict between two leads with both values, and writes nothing', async () => {
+    const refresh = vi.fn()
+    vi.mocked(api.uploadPortalExcel).mockRejectedValue(
+      new ApiError(422, 'VALIDATION_ERROR', 'Import rejected', {
+        totalProblems: 1,
+        returnedProblems: 1,
+        truncated: false,
+        problems: [
+          {
+            severity: 'error',
+            code: 'MERGE_CONFLICT',
+            sheet: 'Merge',
+            column: 'ITO › workstreams › “Communications” › statusMessage',
+            value: "yours: Test's wording · current: Dev's wording",
+            message: 'You and someone else both changed this since you downloaded the workbook. Download a fresh workbook (dev.lead@ust.com updated the portal in the meantime), re-apply just this change, and upload again.',
+          },
+        ],
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel(refresh)
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+
+    expect(await screen.findByText(/import rejected: 1 problem/i)).toBeInTheDocument()
+    expect(screen.getByText(/both changed this since you downloaded/i)).toBeInTheDocument()
+    expect(screen.getByText(/dev\.lead@ust\.com updated the portal/)).toBeInTheDocument()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('shows the server\'s own explanation for an out-of-date workbook it cannot merge (409)', async () => {
+    vi.mocked(api.uploadPortalExcel).mockRejectedValue(
+      new ApiError(409, 'CONFLICT', 'This workbook is out of date: it was downloaded from portal version 3. Download a fresh workbook from the Data Sync page, re-apply your changes there, and upload again.'),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+
+    expect(await screen.findByText(/this workbook is out of date/i)).toBeInTheDocument()
+    expect(screen.queryByText(/someone else synced while you were working/i)).toBeNull()
+  })
+
   it('maps a 403 transport error to an admin-actionable message', async () => {
     vi.mocked(api.uploadPortalExcel).mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'nope'))
     const user = userEvent.setup()

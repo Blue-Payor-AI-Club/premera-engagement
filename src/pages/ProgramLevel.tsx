@@ -293,6 +293,8 @@ export default function ProgramLevel() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const p = data.program[division]
   const isTransition = tab === 'transition'
+  // Synced from the workbook; the bundled copy only covers an API that predates the block.
+  const transition = data.transition ?? TRANSITION_DATA
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds(prev => {
@@ -413,7 +415,7 @@ export default function ProgramLevel() {
       <SlideHeader
         title={isTransition ? 'Transition Program' : `${p.levelLabel} Highlights`}
         sampleLines={isTransition ? [] : ['Program Level Status Reporting Sample']}
-        asOf={isTransition ? TRANSITION_DATA.asOf : data.asOf}
+        asOf={isTransition ? transition.asOf : data.asOf}
       />
 
       {/* Scorecard and risks summarise the selected ITO/BPO division — not applicable to Transition. */}
@@ -445,7 +447,7 @@ export default function ProgramLevel() {
         ))}
       </div>
 
-      {isTransition ? <TransitionTab /> : (
+      {isTransition ? <TransitionTab data={transition} /> : (
       <div className="space-y-6">
 
         {/* ── AG-Grid (desktop md+) ── */}

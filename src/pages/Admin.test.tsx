@@ -2,18 +2,20 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Admin from './Admin'
 import { PortalDataContext } from '../context/PortalDataContext'
-import { DEFAULT_PORTAL_DATA } from '../data/portalData'
+import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
+import { TRANSITION_DATA } from '../data/transitionData'
+import userEvent from '@testing-library/user-event'
 
 const mockUseAuth = vi.fn()
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }))
 
-function renderAdmin() {
+function renderAdmin(data: PortalData = DEFAULT_PORTAL_DATA) {
   return render(
     <PortalDataContext.Provider
       value={{
-        data: DEFAULT_PORTAL_DATA,
+        data,
         loading: false,
         error: null,
         refresh: vi.fn(),
@@ -25,6 +27,25 @@ function renderAdmin() {
     </PortalDataContext.Provider>,
   )
 }
+
+describe('Admin page — preview covers everything the app displays', () => {
+  it('has a Transition view showing the synced Transition data, alongside ITO and BPO', async () => {
+    mockUseAuth.mockReturnValue({ canEdit: true, isSuperAdmin: false })
+    renderAdmin({
+      ...DEFAULT_PORTAL_DATA,
+      transition: { ...TRANSITION_DATA, asOf: '12/25/26', raid: [{ ...TRANSITION_DATA.raid[0], description: 'Synced RAID item' }] },
+    })
+
+    expect(screen.getByRole('button', { name: 'ITO' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'BPO' })).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Transition' }))
+
+    expect(screen.getByTestId('transition-tab')).toBeInTheDocument()
+    expect(screen.getByText('Synced RAID item')).toBeInTheDocument()
+    expect(screen.getAllByText('12/25/26').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Communications & Change Management')).toBeNull()
+  })
+})
 
 describe('Admin page', () => {
   it('a user without edit permission sees the read-only preview with no sync controls and no write affordances', () => {

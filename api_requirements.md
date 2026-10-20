@@ -154,8 +154,41 @@ interface PortalData {
     keyActivities: MilestoneSection[]
     issues: IssueRow[]
   }
+  transition: TransitionBlock   // the Transition tab of /program — see below
+}
+
+interface TransitionBlock {      // rows carry no ids (nothing here is quick-feedback-votable)
+  asOf: string                   // e.g. "10/08/26"
+  overallStatus: StatusKey
+  premeraContacts: { role: string; name: string }[]
+  ustContacts: { role: string; name: string }[]
+  summary: {
+    overallStatus: string        // the overall-status paragraph
+    accomplishments: string[]
+    priorities: { title: string; text: string }[]
+    risks: string[]
+    executiveFocus: string[]
+  }
+  dashboard: {                   // grouped by tower, in display order
+    tower: string
+    rows: {
+      workstream: string
+      planning: { status: StatusKey; start: string; sowSubmit: string; sowApproval: string; onboardingComplete: string }
+      transition: { status: StatusKey | null; start: string; goLive: string }  // null = "N/A"
+      notesRowSpan?: number      // merge this row's Notes cell down N rows (itself included); stays within the tower
+      notes?: { text: string; alert?: boolean }[]                              // alert = rendered red
+    }[]
+  }[]
+  raid: { type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string }[]
 }
 ```
+
+`transition` is optional on `PUT /v1/portal` (a document or backup saved before the tab existed omits it); the server
+fills in the default, and every `GET /v1/portal` response includes it. It is edited through the workbook's
+`TransitionContacts`, `TransitionSummary`, `TransitionDashboard` and `TransitionRaid` sheets plus three `Meta` rows
+(`Transition As-Of Date`, `Transition Overall Status`, `Transition Overall Summary`). Those sheets and Meta rows are
+optional on import: a workbook without them keeps the stored Transition data and returns an
+`OPTIONAL_SHEET_MISSING` warning per absent sheet.
 
 ### Status enum reference (`src/data/status.ts`)
 
@@ -173,7 +206,7 @@ Server must **reject** any `status` outside this set with `422`.
 
 | Route | Page | Reads from `PortalData` |
 |---|---|---|
-| `/program` | `ProgramLevel.tsx` | `program.ito` and `program.bpo` (tab-switchable): `levelLabel`, `workstreams`, `towers`, `milestones` |
+| `/program` | `ProgramLevel.tsx` | `program.ito` and `program.bpo` (tab-switchable): `levelLabel`, `workstreams`, `towers`, `milestones`; and the Transition tab: `transition` |
 | `/tower` | `TowerLevel.tsx` | `tower`: `levelLabel`, `accomplishments`, `activities`, `milestones`, `keyActivities` |
 | `/risks` | `Risks.tsx` | `program.ito.issues`, `program.bpo.issues`, `tower.issues` — filtered to `atRisk`/`delayed`, each row opens `RiskActionsModal` showing `mitigations` + `riskActions` |
 | `/feedback` | `Feedback.tsx` | none (separate `FeedbackEntry` resource, §6) |
@@ -201,7 +234,8 @@ Authorization: Bearer <jwt>
     "ito": { "levelLabel": "...", "workstreams": [...], "towers": [...], "milestones": [...], "issues": [...] },
     "bpo": { "levelLabel": "...", "workstreams": [...], "towers": [...], "milestones": [...], "issues": [...] }
   },
-  "tower": { "levelLabel": "...", "accomplishments": [...], "activities": [...], "milestones": [...], "keyActivities": [...], "issues": [...] }
+  "tower": { "levelLabel": "...", "accomplishments": [...], "activities": [...], "milestones": [...], "keyActivities": [...], "issues": [...] },
+  "transition": { "asOf": "...", "overallStatus": "...", "premeraContacts": [...], "ustContacts": [...], "summary": {...}, "dashboard": [...], "raid": [...] }
 }
 ```
 

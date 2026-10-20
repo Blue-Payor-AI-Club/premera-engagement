@@ -10,7 +10,7 @@ function SectionHeading({ children }: { children: string }) {
 function BulletList({ items }: { items: string[] }) {
   return (
     <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
-      {items.map((t) => <li key={t}>{t}</li>)}
+      {items.map((t, i) => <li key={i}>{t}</li>)}
     </ul>
   )
 }
@@ -18,8 +18,8 @@ function BulletList({ items }: { items: string[] }) {
 function Contacts({ title, people }: { title: string; people: TransitionData['premeraContacts'] }) {
   return (
     <dl aria-label={title} className="space-y-1">
-      {people.map((p) => (
-        <div key={p.role} className="flex flex-wrap gap-x-2 text-[13px]">
+      {people.map((p, i) => (
+        <div key={i} className="flex flex-wrap gap-x-2 text-[13px]">
           <dt className="font-bold text-slate-800">{p.role}:</dt>
           <dd className="text-slate-600">{p.name}</dd>
         </div>
@@ -69,8 +69,8 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
         <div>
           <SectionHeading>Upcoming Priorities</SectionHeading>
           <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
-            {summary.priorities.map((p) => (
-              <li key={p.title}>
+            {summary.priorities.map((p, i) => (
+              <li key={i}>
                 <strong className="font-bold text-slate-900">{p.title}</strong> {p.text}
               </li>
             ))}

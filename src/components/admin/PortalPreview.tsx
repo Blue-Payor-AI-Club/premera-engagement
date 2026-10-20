@@ -3,8 +3,10 @@ import { Flag } from 'lucide-react'
 import { usePortalData } from '../../context/PortalDataContext'
 import { type IssueRow, type ProgramTab, type Workstream } from '../../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../../data/workstreamIcons'
+import { TRANSITION_DATA } from '../../data/transitionData'
 import StatusBadge from '../StatusBadge'
 import MilestoneTable from '../MilestoneTable'
+import TransitionTab from '../transition/TransitionTab'
 
 const SEVERITY_LABELS: Record<string, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
 
@@ -124,20 +126,24 @@ function DivisionPreview({ tab }: { tab: ProgramTab }) {
  */
 export default function PortalPreview() {
   const { data } = usePortalData()
-  const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
+  const [division, setDivision] = useState<'ito' | 'bpo' | 'transition'>('ito')
+  const transition = data.transition ?? TRANSITION_DATA
+  const isTransition = division === 'transition'
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="text-xs font-semibold text-slate-500">As of</span>{' '}
-          <span className="text-sm font-medium text-slate-800">{data.asOf || '—'}</span>
+          <span className="text-sm font-medium text-slate-800">
+            {(isTransition ? transition.asOf : data.asOf) || '—'}
+          </span>
         </div>
-        <div className="text-xs text-slate-400">{data.program[division].levelLabel}</div>
+        <div className="text-xs text-slate-400">{division === 'transition' ? 'Transition Program' : data.program[division].levelLabel}</div>
       </div>
 
       <div className="flex gap-1 border-b border-slate-200">
-        {(['ito', 'bpo'] as const).map((k) => (
+        {(['ito', 'bpo', 'transition'] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -146,12 +152,12 @@ export default function PortalPreview() {
               division === k ? 'border-[#0067b1] text-[#0067b1]' : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            {k.toUpperCase()}
+            {k === 'transition' ? 'Transition' : k.toUpperCase()}
           </button>
         ))}
       </div>
 
-      <DivisionPreview tab={data.program[division]} />
+      {division === 'transition' ? <TransitionTab data={transition} /> : <DivisionPreview tab={data.program[division]} />}
     </div>
   )
 }

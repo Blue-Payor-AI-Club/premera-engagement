@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Download, Upload, PlayCircle, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Download, Upload, PlayCircle, RefreshCw, AlertTriangle, CheckCircle2, Info } from 'lucide-react'
 import {
   ApiError,
   downloadPortalWorkbook,
@@ -177,11 +177,48 @@ export default function ExcelSyncPanel() {
                   {' '}
                   {result.summary.workstreams.ito + result.summary.workstreams.bpo} workstreams,{' '}
                   {result.summary.issues} issues, {result.summary.riskActions} risk actions,{' '}
-                  {result.summary.milestoneRows} milestone rows.
+                  {result.summary.milestoneRows} milestone rows
+                  {result.summary.transition && (
+                    <>
+                      , {result.summary.transition.dashboardRows} transition workstreams,{' '}
+                      {result.summary.transition.raidItems} RAID items
+                    </>
+                  )}
+                  .
                 </>
               )}
             </span>
           </div>
+
+          {result.merge && (
+            <div className="flex items-start gap-3 text-sm text-sky-900 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2.5">
+              <Info size={15} className="shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p>
+                  <strong>{result.dryRun ? 'This would merge with newer changes.' : 'Merged with newer changes.'}</strong>{' '}
+                  Your workbook was downloaded at version {result.merge.baseVersion}, but the portal had moved to version{' '}
+                  {result.merge.currentVersion}
+                  {result.merge.changedBy.length > 0 && <> ({result.merge.changedBy.join(', ')} updated it since)</>}.{' '}
+                  Your {result.merge.yourChanges} change{result.merge.yourChanges !== 1 ? 's' : ''}{' '}
+                  {result.dryRun ? 'would be applied' : 'were applied'} on top of theirs, and theirs {result.dryRun ? 'would be' : 'were'} kept.
+                </p>
+                {!result.dryRun && (
+                  <>
+                    <p className="mt-1 text-sky-800">
+                      Your copy of the workbook doesn&apos;t have their changes — download the updated one before editing again.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => downloadCurrent('export')}
+                      className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-sky-300 text-sky-900 hover:bg-sky-100"
+                    >
+                      <Download size={12} /> Download updated workbook
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {result.ids && result.ids.minted > 0 && (
             <div className="flex items-start gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
@@ -224,7 +261,7 @@ function transportErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 403) return 'Your account is not an admin — ask your portal administrator to run the sync.'
     if (err.status === 413) return 'That file is too large.'
-    if (err.status === 409) return 'Someone else synced while you were working. Reload the page and try again.'
+    // The server says exactly why (out-of-date workbook it can't merge, a concurrent write, …).
     return err.message
   }
   return 'Could not reach the API. Check your connection and try again.'

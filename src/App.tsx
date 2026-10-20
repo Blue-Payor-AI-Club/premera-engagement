@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Settings, Menu, X, BarChart3, AlertTriangle, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
+import { FileSpreadsheet, History, LogOut, Menu, ShieldCheck, X, BarChart3, AlertTriangle, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
 import './index.css'
 import ProgramLevel from './pages/ProgramLevel'
 import Feedback from './pages/Feedback'
 import Admin from './pages/Admin'
 import Risks from './pages/Risks'
+import SuperAdmin from './pages/SuperAdmin'
+import Activity from './pages/Activity'
+import Login from './pages/Login'
+import InviteAccept from './pages/InviteAccept'
+import RequirePermission from './components/RequirePermission'
+import { Spinner } from './components/ui'
+import { useAuth } from './context/AuthContext'
+import { PRIMARY_NAV, visibleUtilityNav } from './lib/navigation'
 
 // ─── Tour ─────────────────────────────────────────────────────────────────────
 
@@ -47,13 +55,14 @@ const TOUR_STEPS = [
     selector: '[data-tour="tab-switcher"]',
     placement: 'bottom' as const,
     icon: <LayoutGrid size={20} className="text-[#0067b1]" />,
-    label: 'ITO & BPO',
-    title: 'ITO & BPO Divisions',
-    body: 'The engagement is split into two program divisions. Click either tab to switch your view.',
+    label: 'ITO, BPO & Transition',
+    title: 'ITO, BPO & Transition',
+    body: 'The engagement is split into two program divisions, plus a Transition view. Click a tab to switch your view.',
     highlights: [
       { color: '#0067b1', text: 'ITO — Infrastructure & Technology Operations workstreams' },
       { color: '#0067b1', text: 'BPO — Business Process Operations workstreams' },
       { color: '#1aa260', text: 'Each division has its own workstreams, milestones, and issues' },
+      { color: '#0067b1', text: 'Transition — executive summary and dashboard for the transition program' },
     ],
   },
   {
@@ -312,11 +321,13 @@ function TourGuide() {
   )
 }
 
-const NAV = [
-  { to: '/program', label: 'Program Level' },
-  { to: '/risks', label: 'Risks & Issues' },
-  { to: '/feedback', label: 'Feedback to UST' },
-]
+const NAV = PRIMARY_NAV
+
+const UTILITY_ICONS: Record<string, typeof ShieldCheck> = {
+  '/activity': History,
+  '/admin': FileSpreadsheet,
+  '/superadmin': ShieldCheck,
+}
 
 function LiveClock() {
   const [now, setNow] = useState(new Date())
@@ -341,6 +352,8 @@ function LiveClock() {
 
 function TopBar() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { user, can, logout } = useAuth()
+  const utility = visibleUtilityNav(can)
 
   return (
     <nav data-tour="topbar" className="sticky top-0 z-[9996] bg-white/90 backdrop-blur border-b border-slate-200">
@@ -381,18 +394,39 @@ function TopBar() {
           <div className="hidden sm:block">
             <LiveClock />
           </div>
-          <NavLink
-            to="/admin"
-            title="Admin · Excel Sync"
-            className={({ isActive }) =>
-              `inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition ${
-                isActive ? 'bg-[#e7f1fa] text-[#0067b1]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`
-            }
+          {utility.map((n) => {
+            const Icon = UTILITY_ICONS[n.to] ?? ShieldCheck
+            return (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                title={n.label}
+                className={({ isActive }) =>
+                  `inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition ${
+                    isActive ? 'bg-[#e7f1fa] text-[#0067b1]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`
+                }
+              >
+                <Icon size={16} />
+                <span className="hidden lg:inline">{n.label}</span>
+              </NavLink>
+            )
+          })}
+          <div className="hidden md:flex items-center gap-2 pl-3 border-l border-slate-200">
+            <div className="leading-tight text-right">
+              <div className="text-xs font-semibold text-slate-700 max-w-[170px] truncate">{user?.name || user?.email}</div>
+              <div className="text-[11px] text-slate-400">{user?.roleLabel}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            title="Sign out"
+            aria-label="Sign out"
+            className="p-2 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
           >
-            <Settings size={16} />
-            <span className="hidden md:inline">Admin</span>
-          </NavLink>
+            <LogOut size={16} />
+          </button>
           {/* mobile hamburger */}
           <button
             className="sm:hidden p-2 rounded-md text-slate-600 hover:bg-slate-100 transition"
@@ -427,7 +461,7 @@ function TopBar() {
   )
 }
 
-export default function App() {
+function AuthenticatedApp() {
   return (
     <div className="min-h-screen">
       <TourGuide />
@@ -438,10 +472,26 @@ export default function App() {
           <Route path="/program" element={<ProgramLevel />} />
           <Route path="/risks" element={<Risks />} />
           <Route path="/feedback" element={<Feedback />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/activity" element={<RequirePermission permission="audit:read"><Activity /></RequirePermission>} />
+          <Route path="/admin" element={<RequirePermission permission="portal:write"><Admin /></RequirePermission>} />
+          <Route path="/superadmin" element={<RequirePermission permission="admin:manage"><SuperAdmin /></RequirePermission>} />
           <Route path="*" element={<Navigate to="/program" replace />} />
         </Routes>
       </main>
     </div>
   )
+}
+
+/** Sign-in gate. Nothing in the portal renders (or fetches) until there is a validated session. */
+export default function App() {
+  const { token, user, loading } = useAuth()
+  const location = useLocation()
+
+  // The invite page is reachable signed-out (that's its whole purpose).
+  if (location.pathname === '/invite') return <InviteAccept />
+  if (loading || (token && !user)) {
+    return <div className="min-h-screen flex items-center justify-center"><Spinner label="Loading…" /></div>
+  }
+  if (!token || !user) return <Login />
+  return <AuthenticatedApp />
 }

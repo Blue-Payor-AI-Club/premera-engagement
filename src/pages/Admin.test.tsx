@@ -27,8 +27,8 @@ function renderAdmin() {
 }
 
 describe('Admin page', () => {
-  it('a viewer sees the read-only preview with no sync controls and no write affordances', () => {
-    mockUseAuth.mockReturnValue({ isAdmin: false })
+  it('a user without edit permission sees the read-only preview with no sync controls and no write affordances', () => {
+    mockUseAuth.mockReturnValue({ canEdit: false, isSuperAdmin: false })
     renderAdmin()
 
     // No editing surface anywhere: the old Admin had "Save Changes", free-text inputs
@@ -42,8 +42,8 @@ describe('Admin page', () => {
     expect(screen.getByText('Communications & Change Management')).toBeInTheDocument()
   })
 
-  it('an admin sees the Excel sync controls and the preview, but still no manual-edit inputs', () => {
-    mockUseAuth.mockReturnValue({ isAdmin: true })
+  it('a UST stakeholder sees the Excel sync controls and the preview, but still no manual-edit inputs', () => {
+    mockUseAuth.mockReturnValue({ canEdit: true, isSuperAdmin: false })
     renderAdmin()
 
     expect(screen.getByRole('button', { name: /sync now/i })).toBeInTheDocument()
@@ -51,5 +51,17 @@ describe('Admin page', () => {
     expect(screen.queryByRole('button', { name: /save changes/i })).toBeNull()
     expect(screen.queryAllByRole('textbox')).toHaveLength(0)
     expect(screen.getByText('Communications & Change Management')).toBeInTheDocument()
+  })
+
+  it('only a Super Admin gets the destructive "Reset to defaults" button', () => {
+    mockUseAuth.mockReturnValue({ canEdit: true, isSuperAdmin: false })
+    const { unmount } = renderAdmin()
+    expect(screen.queryByRole('button', { name: /reset to defaults/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /export json backup/i })).toBeInTheDocument()
+    unmount()
+
+    mockUseAuth.mockReturnValue({ canEdit: true, isSuperAdmin: true })
+    renderAdmin()
+    expect(screen.getByRole('button', { name: /reset to defaults/i })).toBeInTheDocument()
   })
 })

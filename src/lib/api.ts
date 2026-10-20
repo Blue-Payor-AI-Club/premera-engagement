@@ -6,6 +6,14 @@ export function setApiToken(t: string | null): void {
   _token = t
 }
 
+let _onUnauthorized: (() => void) | null = null
+
+/** Registered by AuthProvider: called when the server says the session is no longer valid
+ * (token expired, or the user was disabled/removed) so the app drops back to sign-in. */
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  _onUnauthorized = fn
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -28,6 +36,9 @@ export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Re
 
   const res = await fetch(`${BASE}${path}`, { ...opts, headers })
   if (!res.ok) {
+    // A 401 from /auth/* is just "wrong code" etc. — only a 401 elsewhere means the
+    // session itself is dead.
+    if (res.status === 401 && !path.startsWith('/auth/') && _token) _onUnauthorized?.()
     let code = String(res.status)
     let message = res.statusText
     let details: unknown
@@ -40,21 +51,6 @@ export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Re
     throw new ApiError(res.status, code, message, details)
   }
   return res
-}
-
-export async function devLogin(
-  sub: string,
-  role: 'viewer' | 'admin',
-): Promise<{ token: string; sub: string; role: string }> {
-  const res = await fetch(`${BASE}/auth/dev-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sub, role }),
-  })
-  if (!res.ok) throw new Error(`Dev login failed: ${res.status}`)
-  const data = await res.json() as { token: string; sub: string; role: string }
-  setApiToken(data.token)
-  return data
 }
 
 // ─── Excel portal-data import ────────────────────────────────────────────────

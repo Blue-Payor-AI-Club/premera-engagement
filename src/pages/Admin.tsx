@@ -75,7 +75,7 @@ function BreakGlassRestore() {
 }
 
 export default function Admin() {
-  const { isAdmin } = useAuth()
+  const { canEdit, isSuperAdmin } = useAuth()
   const { data, error, reset } = usePortalData()
 
   function exportJson() {
@@ -92,13 +92,13 @@ export default function Admin() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-            Admin · Excel Sync
+            Data Sync · Excel
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Portal data is maintained in an Excel workbook. Sync it here to update the portal.
           </p>
         </div>
-        {isAdmin && (
+        {canEdit && (
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button
               onClick={exportJson}
@@ -106,12 +106,15 @@ export default function Admin() {
             >
               <Download size={15} /> Export JSON backup
             </button>
-            <button
-              onClick={restoreDefaults}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50"
-            >
-              <RotateCcw size={15} /> Reset to defaults
-            </button>
+            {/* Wiping the portal back to seed data is Super Admin only (the API enforces it too). */}
+            {isSuperAdmin && (
+              <button
+                onClick={restoreDefaults}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                <RotateCcw size={15} /> Reset to defaults
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -123,7 +126,7 @@ export default function Admin() {
         </div>
       )}
 
-      {!isAdmin ? (
+      {!canEdit ? (
         <PortalPreview />
       ) : (
         <div className="space-y-6">

@@ -21,6 +21,8 @@ import {
 import MilestoneTable from '../components/MilestoneTable'
 import SlideHeader from '../components/SlideHeader'
 import Legend from '../components/Legend'
+import TransitionTab from '../components/transition/TransitionTab'
+import { TRANSITION_DATA } from '../data/transitionData'
 import StatusDot from '../components/StatusDot'
 import QuickFeedback from '../components/QuickFeedback'
 import { usePortalData } from '../context/PortalDataContext'
@@ -57,9 +59,13 @@ const ICONS = WORKSTREAM_ICON_COMPONENTS
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 
-const TAB_META: Record<'ito' | 'bpo', { short: string; full: string }> = {
+type ProgramTab = 'ito' | 'bpo' | 'transition'
+const PROGRAM_TABS: ProgramTab[] = ['ito', 'bpo', 'transition']
+
+const TAB_META: Record<ProgramTab, { short: string; full: string }> = {
   ito: { short: 'ITO', full: 'Infrastructure & Technology Operations' },
   bpo: { short: 'BPO', full: 'Business Process Operations' },
+  transition: { short: 'Transition', full: 'Executive Summary & Dashboard' },
 }
 
 const portalTheme = themeQuartz.withParams({
@@ -280,9 +286,13 @@ function RisksSection({ issues }: { issues: IssueRow[] }) {
 export default function ProgramLevel() {
   const { data } = usePortalData()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'ito' | 'bpo'>('ito')
+  const [tab, setTab] = useState<ProgramTab>('ito')
+  // The ITO/BPO division whose data the grid/scorecard use. Stays put while the Transition
+  // tab (which has its own content) is open, so switching back restores the same view.
+  const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const p = data.program[tab]
+  const p = data.program[division]
+  const isTransition = tab === 'transition'
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds(prev => {
@@ -292,8 +302,9 @@ export default function ProgramLevel() {
     })
   }, [])
 
-  const handleTabChange = useCallback((k: 'ito' | 'bpo') => {
+  const handleTabChange = useCallback((k: ProgramTab) => {
     setTab(k)
+    if (k !== 'transition') setDivision(k)
     setExpandedIds(new Set())
   }, [])
 
@@ -400,18 +411,19 @@ export default function ProgramLevel() {
   return (
     <div className="slide">
       <SlideHeader
-        title={`${p.levelLabel} Highlights`}
-        sampleLines={['Program Level Status Reporting Sample']}
-        asOf={data.asOf}
+        title={isTransition ? 'Transition Program' : `${p.levelLabel} Highlights`}
+        sampleLines={isTransition ? [] : ['Program Level Status Reporting Sample']}
+        asOf={isTransition ? TRANSITION_DATA.asOf : data.asOf}
       />
 
-      <HealthScorecard workstreams={p.workstreams} />
+      {/* Scorecard and risks summarise the selected ITO/BPO division — not applicable to Transition. */}
+      {!isTransition && <HealthScorecard workstreams={p.workstreams} />}
 
-      <RisksSection issues={p.issues} />
+      {!isTransition && <RisksSection issues={p.issues} />}
 
       {/* ITO / BPO segmented switcher */}
       <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1" role="tablist" aria-label="Program division">
-        {(['ito', 'bpo'] as const).map((k) => (
+        {PROGRAM_TABS.map((k) => (
           <button
             key={k}
             role="tab"
@@ -433,6 +445,7 @@ export default function ProgramLevel() {
         ))}
       </div>
 
+      {isTransition ? <TransitionTab /> : (
       <div className="space-y-6">
 
         {/* ── AG-Grid (desktop md+) ── */}
@@ -539,6 +552,7 @@ export default function ProgramLevel() {
         </div>
 
       </div>
+      )}
 
       <div className="mt-8 flex justify-center md:justify-end">
         <Legend />

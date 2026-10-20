@@ -68,7 +68,7 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
 
   // Fetch from API once auth is resolved; re-fetch if token changes
   useEffect(() => {
-    if (authLoading) return
+    if (authLoading || !token) return
     fetchDocument()
   }, [authLoading, token, fetchDocument])
 

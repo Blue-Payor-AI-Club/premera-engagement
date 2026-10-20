@@ -1,86 +1,86 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { devLogin, setApiToken } from '../lib/api'
+import { setApiToken, setUnauthorizedHandler } from '../lib/api'
+import { getMe, type Permission, type SessionUser } from '../lib/authApi'
 
 const TOKEN_KEY = 'ustpremera_token'
-const ROLE_KEY  = 'ustpremera_role'
-const SUB_KEY   = 'ustpremera_sub'
 
 interface AuthCtx {
   token: string | null
-  role: string | null
-  sub: string | null
-  isAdmin: boolean
+  user: SessionUser | null
+  /** True only while a stored session is being re-validated on startup. */
   loading: boolean
-  login: (sub: string, role: 'viewer' | 'admin') => Promise<void>
+  /** UI gating only — the server re-checks every permission on every request. */
+  can: (permission: Permission) => boolean
+  /** UST Stakeholders and Super Admins: may edit portal data and upload the Excel workbook. */
+  canEdit: boolean
+  isSuperAdmin: boolean
+  completeLogin: (session: { token: string; user: SessionUser }) => void
   logout: () => void
 }
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
+// Exported (not just the hook) so tests can inject a session directly.
+export { AuthContext }
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null)
-  const [role, setRole]   = useState<string | null>(null)
-  const [sub, setSub]     = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
+  // sessionStorage (not localStorage): the session ends with the tab, and the token isn't
+  // readable by other tabs. The server still enforces expiry and revocation.
+  const [token, setToken] = useState<string | null>(() => {
     const stored = sessionStorage.getItem(TOKEN_KEY)
-    const storedRole = (sessionStorage.getItem(ROLE_KEY) as 'viewer' | 'admin' | null) ?? 'admin'
-    const storedSub = sessionStorage.getItem(SUB_KEY) ?? 'dev@premera.com'
+    // Installed here, not in an effect: children's effects run before this component's,
+    // and a child fetching on mount must already see the token.
+    setApiToken(stored)
+    return stored
+  })
+  const [user, setUser] = useState<SessionUser | null>(null)
+  const [loading, setLoading] = useState<boolean>(() => sessionStorage.getItem(TOKEN_KEY) !== null)
 
-    if (stored) {
-      setApiToken(stored)
-      setToken(stored)
-      setRole(sessionStorage.getItem(ROLE_KEY))
-      setSub(sessionStorage.getItem(SUB_KEY))
-    }
-
-    // Always refresh token for current backend on startup.
-    // Falls back to stored token when backend/auth is unavailable.
-    devLogin(storedSub, storedRole)
-      .then(data => {
-        sessionStorage.setItem(TOKEN_KEY, data.token)
-        sessionStorage.setItem(ROLE_KEY,  data.role)
-        sessionStorage.setItem(SUB_KEY,   data.sub)
-        setToken(data.token)
-        setRole(data.role)
-        setSub(data.sub)
-      })
-      .catch(() => {
-        if (!stored) {
-          setApiToken(null)
-          setToken(null)
-          setRole(null)
-          setSub(null)
-        }
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  const login = useCallback(async (sub: string, role: 'viewer' | 'admin') => {
-    const data = await devLogin(sub, role)
-    sessionStorage.setItem(TOKEN_KEY, data.token)
-    sessionStorage.setItem(ROLE_KEY,  data.role)
-    sessionStorage.setItem(SUB_KEY,   data.sub)
-    setToken(data.token)
-    setRole(data.role)
-    setSub(data.sub)
-  }, [])
-
-  const logout = useCallback(() => {
+  const clear = useCallback(() => {
     sessionStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(ROLE_KEY)
-    sessionStorage.removeItem(SUB_KEY)
     setApiToken(null)
     setToken(null)
-    setRole(null)
-    setSub(null)
+    setUser(null)
   }, [])
 
-  const value = useMemo(
-    () => ({ token, role, sub, isAdmin: role === 'admin', loading, login, logout }),
-    [token, role, sub, loading, login, logout],
-  )
+  // Re-validate a stored session on startup. Done once; the user's role and permissions
+  // come from the server, so a role change or removal is reflected on reload.
+  useEffect(() => {
+    if (!sessionStorage.getItem(TOKEN_KEY)) return
+    getMe()
+      .then(setUser)
+      .catch(clear)
+      .finally(() => setLoading(false))
+  }, [clear])
+
+  // If the server later rejects the token (expired, or this user was disabled/removed),
+  // drop straight back to the sign-in screen.
+  useEffect(() => {
+    setUnauthorizedHandler(clear)
+    return () => setUnauthorizedHandler(null)
+  }, [clear])
+
+  const completeLogin = useCallback((session: { token: string; user: SessionUser }) => {
+    sessionStorage.setItem(TOKEN_KEY, session.token)
+    setApiToken(session.token)
+    setToken(session.token)
+    setUser(session.user)
+    setLoading(false)
+  }, [])
+
+  const value = useMemo<AuthCtx>(() => {
+    const permissions = new Set<Permission>(user?.permissions ?? [])
+    return {
+      token,
+      user,
+      loading,
+      can: (p) => permissions.has(p),
+      canEdit: permissions.has('portal:write'),
+      isSuperAdmin: permissions.has('admin:manage'),
+      completeLogin,
+      logout: clear,
+    }
+  }, [token, user, loading, completeLogin, clear])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

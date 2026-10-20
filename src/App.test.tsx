@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import { AuthStub } from './test/auth'
@@ -15,16 +16,18 @@ vi.mock('./pages/Activity', () => ({ default: () => <div>PAGE:activity</div> }))
 vi.mock('./pages/Login', () => ({ default: () => <div>PAGE:login</div> }))
 vi.mock('./pages/InviteAccept', () => ({ default: () => <div>PAGE:invite</div> }))
 
-function renderAt(path: string, role: Role | null) {
+function renderAt(path: string, role: Role | null, name?: string) {
   localStorage.setItem('ustpremera_tour_v2', 'done') // keep the onboarding tour out of the way
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <AuthStub role={role}><App /></AuthStub>
+      <AuthStub role={role} name={name}><App /></AuthStub>
     </MemoryRouter>,
   )
 }
 
 const link = (name: RegExp) => screen.queryByRole('link', { name })
+const manage = (name: RegExp) => screen.queryByRole('menuitem', { name })
+const openAccountMenu = () => userEvent.click(screen.getByRole('button', { name: /account menu/i }))
 
 describe('App shell — sign-in gate', () => {
   it('shows only the sign-in page when signed out, whatever URL was requested', () => {
@@ -40,29 +43,51 @@ describe('App shell — sign-in gate', () => {
 })
 
 describe('App shell — navigation by role', () => {
-  it('Premera Stakeholder: the three portal sections only — no Data Sync, Activity or Super Admin', () => {
+  it('Premera Stakeholder: the three portal sections only — no Data Sync, Activity or Super Admin', async () => {
     renderAt('/program', 'premera_stakeholder')
+    await openAccountMenu()
     expect(link(/program level/i)).toBeInTheDocument()
     expect(link(/risks & issues/i)).toBeInTheDocument()
     expect(link(/feedback to ust/i)).toBeInTheDocument()
-    expect(link(/data sync/i)).toBeNull()
-    expect(link(/activity/i)).toBeNull()
-    expect(link(/super admin/i)).toBeNull()
-    expect(screen.getByText(/premera stakeholder/i)).toBeInTheDocument()
+    expect(manage(/data sync/i)).toBeNull()
+    expect(manage(/activity/i)).toBeNull()
+    expect(manage(/super admin/i)).toBeNull()
+    expect(screen.getAllByText(/premera stakeholder/i).length).toBeGreaterThan(0)
   })
 
-  it('UST Stakeholder: Data Sync and Activity, but no Super Admin', () => {
+  it('addresses the signed-in user by first name, and falls back to the email when there is no name', async () => {
+    const { unmount } = renderAt('/program', 'ust_stakeholder', 'Neeta Kuriakose')
+    await openAccountMenu()
+    expect(screen.getByText('Hi, Neeta')).toBeInTheDocument()
+    expect(screen.getAllByText('Neeta Kuriakose').length).toBeGreaterThan(0)
+    unmount()
+
     renderAt('/program', 'ust_stakeholder')
-    expect(link(/data sync/i)).toBeInTheDocument()
-    expect(link(/activity/i)).toBeInTheDocument()
-    expect(link(/super admin/i)).toBeNull()
+    await openAccountMenu()
+    expect(screen.queryByText(/^Hi, /)).toBeNull()
+    expect(screen.getAllByText('ust_stakeholder@example.com').length).toBeGreaterThan(0)
   })
 
-  it('Super Admin: everything', () => {
+  it('the account menu offers sign-out', async () => {
+    renderAt('/program', 'ust_stakeholder')
+    await openAccountMenu()
+    expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  it('UST Stakeholder: Data Sync and Activity, but no Super Admin', async () => {
+    renderAt('/program', 'ust_stakeholder')
+    await openAccountMenu()
+    expect(manage(/data sync/i)).toBeInTheDocument()
+    expect(manage(/activity/i)).toBeInTheDocument()
+    expect(manage(/super admin/i)).toBeNull()
+  })
+
+  it('Super Admin: everything', async () => {
     renderAt('/program', 'super_admin')
-    expect(link(/data sync/i)).toBeInTheDocument()
-    expect(link(/activity/i)).toBeInTheDocument()
-    expect(link(/super admin/i)).toBeInTheDocument()
+    await openAccountMenu()
+    expect(manage(/data sync/i)).toBeInTheDocument()
+    expect(manage(/activity/i)).toBeInTheDocument()
+    expect(manage(/super admin/i)).toBeInTheDocument()
   })
 })
 

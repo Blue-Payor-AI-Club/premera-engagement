@@ -15,6 +15,7 @@ function statusBadge(i: Invite) {
 
 export default function InvitesTab() {
   const { data: invites, error, loading, reload } = useResource(adminApi.listInvites)
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('premera_stakeholder')
   const [busy, setBusy] = useState(false)
@@ -40,13 +41,16 @@ export default function InvitesTab() {
     e.preventDefault()
     const address = email.trim()
     if (!address) return
+    const displayName = name.trim() || undefined
     void act(
-      () => adminApi.createInvite(address, role),
+      () => adminApi.createInvite(address, role, displayName),
       (r) => {
         setEmail('')
+        setName('')
+        const who = displayName ? `${displayName} (${address})` : address
         return r && (r as Invite).emailSent === false
-          ? `Invite created for ${address}, but the email could not be delivered. Use Resend once mail is working.`
-          : `Invitation sent to ${address}.`
+          ? `Invite created for ${who}, but the email could not be delivered. Use Resend once mail is working.`
+          : `Invitation sent to ${who}.`
       },
     )
   }
@@ -54,6 +58,10 @@ export default function InvitesTab() {
   return (
     <div className="space-y-5">
       <form onSubmit={send} className="rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3">
+        <label className="text-xs font-medium text-slate-500 flex-1 min-w-[12rem]">
+          Name
+          <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={`${inputCls} mt-1`} />
+        </label>
         <label className="text-xs font-medium text-slate-500 flex-1 min-w-[14rem]">
           Email address
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" className={`${inputCls} mt-1`} />
@@ -78,7 +86,10 @@ export default function InvitesTab() {
             <tbody className="divide-y divide-slate-100">
               {(invites ?? []).map((i) => (
                 <tr key={i.id}>
-                  <td className="px-4 py-2.5 font-medium text-slate-800">{i.email}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="font-medium text-slate-800">{i.name || i.email}</div>
+                    {i.name && <div className="text-xs text-slate-500">{i.email}</div>}
+                  </td>
                   <td className="px-4 py-2.5 text-slate-600">{i.roleLabel}</td>
                   <td className="px-4 py-2.5">{statusBadge(i)}</td>
                   <td className="px-4 py-2.5 text-slate-600">{i.invitedBy}</td>

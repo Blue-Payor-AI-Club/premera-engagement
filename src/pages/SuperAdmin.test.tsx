@@ -127,6 +127,35 @@ describe('SuperAdmin — users', () => {
     expect(adminApi.updateUser).toHaveBeenCalledWith('other@ust.com', { role: 'premera_stakeholder' })
   })
 
+  it('shows each user by name, and lets a Super Admin set or change it', async () => {
+    vi.mocked(adminApi.listUsers).mockResolvedValue([
+      user({ email: 'neeta@ust.com', name: 'Neeta Kuriakose' }),
+      user({ email: 'noname@ust.com' }),
+    ])
+    vi.mocked(adminApi.updateUser).mockResolvedValue(user({ name: 'Sam Lee' }))
+    await openUsers()
+    expect(await screen.findByText('Neeta Kuriakose')).toBeInTheDocument()
+    expect(screen.getByText('No name yet')).toBeInTheDocument()
+
+    const u = userEvent.setup()
+    await u.click(screen.getByRole('button', { name: /edit name for noname@ust.com/i }))
+    expect(screen.getByRole('button', { name: /save name/i })).toBeDisabled() // blank isn't a name
+    await u.type(screen.getByLabelText(/name for noname@ust.com/i), '  Sam Lee {enter}')
+    expect(adminApi.updateUser).toHaveBeenCalledWith('noname@ust.com', { name: 'Sam Lee' })
+  })
+
+  it('does not call the API when the name is unchanged or editing is cancelled', async () => {
+    vi.mocked(adminApi.listUsers).mockResolvedValue([user({ email: 'neeta@ust.com', name: 'Neeta Kuriakose' })])
+    await openUsers()
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('button', { name: /edit name for neeta@ust.com/i }))
+    await u.click(screen.getByRole('button', { name: /save name/i })) // draft is still the current name
+    await u.click(screen.getByRole('button', { name: /edit name for neeta@ust.com/i }))
+    await u.type(screen.getByLabelText(/name for neeta@ust.com/i), 'x')
+    await u.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(adminApi.updateUser).not.toHaveBeenCalled()
+  })
+
   it('disables and removes a user via the API', async () => {
     vi.mocked(adminApi.listUsers).mockResolvedValue([user({ email: 'other@ust.com' })])
     vi.mocked(adminApi.updateUser).mockResolvedValue(user({ status: 'disabled' }))
@@ -150,8 +179,21 @@ describe('SuperAdmin — invitations', () => {
     await u.selectOptions(screen.getByLabelText('Invite role'), 'ust_stakeholder')
     await u.click(screen.getByRole('button', { name: /send invite/i }))
 
-    expect(adminApi.createInvite).toHaveBeenCalledWith('friend@premera.com', 'ust_stakeholder')
+    expect(adminApi.createInvite).toHaveBeenCalledWith('friend@premera.com', 'ust_stakeholder', undefined)
     expect(await screen.findByRole('status')).toHaveTextContent(/could not be delivered/i)
+  })
+
+  it("sends the invitee's name along with the invite", async () => {
+    vi.mocked(adminApi.createInvite).mockResolvedValue({ id: 'inv_2', emailSent: true } as Invite)
+    renderPage()
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('tab', { name: /invitations/i }))
+    await u.type(await screen.findByPlaceholderText('Full name'), '  Priya Nair ')
+    await u.type(screen.getByPlaceholderText('name@company.com'), 'priya@premera.com')
+    await u.click(screen.getByRole('button', { name: /send invite/i }))
+
+    expect(adminApi.createInvite).toHaveBeenCalledWith('priya@premera.com', 'premera_stakeholder', 'Priya Nair')
+    expect(await screen.findByRole('status')).toHaveTextContent('Priya Nair (priya@premera.com)')
   })
 
   it('offers Resend/Revoke only on pending invites', async () => {

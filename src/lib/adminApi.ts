@@ -31,6 +31,7 @@ export interface AccessRequest {
 export interface Invite {
   id: string
   email: string
+  name?: string
   role: Role
   roleLabel: string
   status: 'pending' | 'accepted' | 'revoked'
@@ -113,7 +114,8 @@ export const adminApi = {
     json<AccessRequest>(`/admin/access-requests/${enc(id)}/reject`, send('POST', { note })),
 
   listInvites: () => json<Invite[]>('/admin/invites'),
-  createInvite: (email: string, role: Role) => json<Invite>('/admin/invites', send('POST', { email, role })),
+  createInvite: (email: string, role: Role, name?: string) =>
+    json<Invite>('/admin/invites', send('POST', { email, role, name })),
   resendInvite: (id: string) => json<Invite>(`/admin/invites/${enc(id)}/resend`, send('POST')),
   revokeInvite: (id: string) => json<void>(`/admin/invites/${enc(id)}`, send('DELETE')),
 

@@ -4,13 +4,14 @@ import { AuthContext } from '../context/AuthContext'
 import type { Permission, Role } from '../lib/authApi'
 import { userFor } from './users'
 
-export function AuthStub({ role, children, completeLogin = vi.fn(), logout = vi.fn() }: {
+export function AuthStub({ role, name, children, completeLogin = vi.fn(), logout = vi.fn() }: {
   role: Role | null
+  name?: string
   children: ReactNode
   completeLogin?: () => void
   logout?: () => void
 }) {
-  const user = role ? userFor(role) : null
+  const user = role ? { ...userFor(role), name } : null
   const perms = new Set<Permission>(user?.permissions ?? [])
   return (
     <AuthContext.Provider

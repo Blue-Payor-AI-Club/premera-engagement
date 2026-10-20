@@ -3,7 +3,8 @@ import { ShieldAlert, MailCheck } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
 import { ErrorBanner, btnPrimary, btnSecondary, inputCls } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
-import { requestCode, submitAccessRequest, verifyCode } from '../lib/authApi'
+import { ApiError } from '../lib/api'
+import { requestCode, submitAccessRequest, trustedLogin, verifyCode } from '../lib/authApi'
 import { errorMessage } from '../lib/format'
 
 type Step =
@@ -49,6 +50,18 @@ export default function Login() {
     const address = (step.name === 'code' ? step.email : email).trim()
     if (!address) return
     void run(async () => {
+      // Named trusted users skip the one-time-code step. Any other address 404s and we
+      // fall through to the normal code flow. (Only on the email step — a resend can't
+      // be a trusted address, since those never reach the code step.)
+      if (step.name === 'email') {
+        try {
+          const result = await trustedLogin(address)
+          completeLogin({ token: result.token, user: result.user })
+          return
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err
+        }
+      }
       await requestCode(address)
       setCode('')
       setCooldown(RESEND_SECONDS)

@@ -47,6 +47,12 @@ export function verifyCode(email: string, code: string): Promise<VerifyResult> {
   return post('/auth/verify-code', { email, code })
 }
 
+/** A short allowlist of named users who skip the one-time-code step entirely and are
+ * signed straight in. Any other address 404s — the caller falls back to requestCode. */
+export function trustedLogin(email: string): Promise<Extract<VerifyResult, { status: 'authenticated' }>> {
+  return post('/auth/trusted-login', { email })
+}
+
 /** `requestToken` is the short-lived proof-of-email token from verifyCode — it can do nothing else. */
 export function submitAccessRequest(
   requestToken: string,

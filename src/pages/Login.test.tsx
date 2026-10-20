@@ -12,6 +12,7 @@ vi.mock('../lib/authApi', async (orig) => ({
   requestCode: vi.fn(),
   verifyCode: vi.fn(),
   submitAccessRequest: vi.fn(),
+  trustedLogin: vi.fn(),
 }))
 
 const completeLogin = vi.fn()
@@ -30,6 +31,8 @@ async function signInAs(email: string, code = '123456') {
 
 beforeEach(() => {
   vi.mocked(authApi.requestCode).mockResolvedValue({ sent: true, expiresInSeconds: 600 })
+  // By default no address is a trusted-login address, so every test falls through to the code flow.
+  vi.mocked(authApi.trustedLogin).mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'No route'))
 })
 
 describe('Login', () => {
@@ -42,6 +45,20 @@ describe('Login', () => {
     expect(authApi.requestCode).toHaveBeenCalledWith('ust@example.com')
     expect(authApi.verifyCode).toHaveBeenCalledWith('ust@example.com', '123456')
     await waitFor(() => expect(completeLogin).toHaveBeenCalledWith({ token: 'jwt', user: session.user }))
+  })
+
+  it('signs a trusted user straight in, skipping the one-time-code step', async () => {
+    const session = { status: 'authenticated' as const, token: 'jwt', user: userFor('super_admin') }
+    vi.mocked(authApi.trustedLogin).mockResolvedValue(session)
+    renderLogin()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/email address/i), 'vinoth.kumar@ust.com')
+    await user.click(screen.getByRole('button', { name: /send sign-in code/i }))
+
+    expect(authApi.trustedLogin).toHaveBeenCalledWith('vinoth.kumar@ust.com')
+    await waitFor(() => expect(completeLogin).toHaveBeenCalledWith({ token: 'jwt', user: session.user }))
+    expect(authApi.requestCode).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText(/sign-in code/i)).toBeNull()
   })
 
   it('sends an unregistered user to the "no access" page, and files their request with the verification token', async () => {

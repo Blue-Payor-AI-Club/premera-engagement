@@ -220,6 +220,50 @@ describe('ExcelSyncPanel', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
+  it('lets the uploader settle a clash from the same file, without downloading a new workbook', async () => {
+    const refresh = vi.fn()
+    vi.mocked(api.uploadPortalExcel).mockRejectedValueOnce(
+      new ApiError(422, 'VALIDATION_ERROR', 'Import rejected', {
+        totalProblems: 1,
+        returnedProblems: 1,
+        truncated: false,
+        problems: [
+          { severity: 'error', code: 'MERGE_CONFLICT', sheet: 'Merge', column: 'ITO › statusMessage', value: 'yours: A · current: B', message: 'Both changed this.' },
+        ],
+      }),
+    )
+    vi.mocked(api.uploadPortalExcel).mockResolvedValueOnce(successResult())
+    const user = userEvent.setup()
+    renderPanel(refresh)
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+    await user.click(await screen.findByRole('button', { name: /use my values/i }))
+
+    expect(api.uploadPortalExcel).toHaveBeenLastCalledWith(expect.any(File), { dryRun: false, onConflict: 'mine' })
+    expect(await screen.findByText(/sync complete/i)).toBeInTheDocument()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('offers no clash choice for ordinary validation errors', async () => {
+    vi.mocked(api.uploadPortalExcel).mockRejectedValue(
+      new ApiError(422, 'VALIDATION_ERROR', 'Import rejected', {
+        totalProblems: 1,
+        returnedProblems: 1,
+        truncated: false,
+        problems: [{ severity: 'error', code: 'INVALID_ENUM', sheet: 'Issues', message: 'Bad status.' }],
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    selectFile(xlsxFile())
+    await user.click(screen.getByRole('button', { name: /sync now/i }))
+
+    expect(await screen.findByText(/import rejected: 1 problem/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /use my values/i })).toBeNull()
+  })
+
   it('shows the server\'s own explanation for an out-of-date workbook it cannot merge (409)', async () => {
     vi.mocked(api.uploadPortalExcel).mockRejectedValue(
       new ApiError(409, 'CONFLICT', 'This workbook is out of date: it was downloaded from portal version 3. Download a fresh workbook from the Data Sync page, re-apply your changes there, and upload again.'),

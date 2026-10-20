@@ -160,6 +160,8 @@ export interface UploadPortalExcelOptions {
   dryRun?: boolean
   /** Current document ETag, sent as If-Match for optimistic concurrency. */
   etag?: string | null
+  /** Settle a field you and someone else both changed: keep what the portal has, or use your value. */
+  onConflict?: 'mine' | 'current'
 }
 
 /**
@@ -174,6 +176,7 @@ export async function uploadPortalExcel(
 ): Promise<ExcelImportResult> {
   const params = new URLSearchParams()
   if (opts.dryRun) params.set('dryRun', 'true')
+  if (opts.onConflict) params.set('onConflict', opts.onConflict)
   params.set('filename', file.name)
 
   const headers: Record<string, string> = { 'Content-Type': XLSX_MIME }

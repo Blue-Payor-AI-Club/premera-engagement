@@ -125,6 +125,10 @@ export const adminApi = {
     input: { enabled: boolean; roles: NotifiableRole[]; emails: string[] },
   ) => json<NotificationSetting>(`/admin/notification-settings/${enc(category)}`, send('PUT', input)),
 
+  getAllowedDomains: () => json<{ domains: string[]; updatedAt?: string; updatedBy?: string }>('/admin/auth-settings'),
+  saveAllowedDomains: (domains: string[]) =>
+    json<{ domains: string[]; updatedAt?: string; updatedBy?: string }>('/admin/auth-settings', send('PUT', { domains })),
+
   listEmailLog: () => json<EmailLogEntry[]>('/admin/email-log?limit=200'),
   retryEmail: (id: string) => json<{ ok: boolean }>(`/admin/email-log/${enc(id)}/retry`, send('POST')),
 

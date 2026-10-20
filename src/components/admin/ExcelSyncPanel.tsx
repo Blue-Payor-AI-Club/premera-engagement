@@ -39,7 +39,7 @@ export default function ExcelSyncPanel() {
     setFileError(message)
   }
 
-  async function runImport(dryRun: boolean) {
+  async function runImport(dryRun: boolean, onConflict?: 'mine' | 'current') {
     if (!file || fileError) return
     setPhase('busy')
     setResult(null)
@@ -47,7 +47,7 @@ export default function ExcelSyncPanel() {
     setTransportMessage(null)
 
     try {
-      const outcome = await uploadPortalExcel(file, { dryRun })
+      const outcome = await uploadPortalExcel(file, { dryRun, onConflict })
       setResult(outcome)
       setPhase('success')
       if (!dryRun) refresh()
@@ -159,6 +159,32 @@ export default function ExcelSyncPanel() {
             totalProblems={rejection.totalProblems}
             truncated={rejection.truncated}
           />
+          {rejection.problems.some((p) => p.code === 'MERGE_CONFLICT') && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 space-y-2">
+              <p className="text-sm text-slate-700">
+                Someone else changed the same thing you did. Everything else in your workbook will be applied either way — no
+                need to download a new copy.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => runImport(false, 'current')}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 bg-white hover:bg-slate-100 disabled:opacity-40"
+                >
+                  Keep the portal&apos;s values
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => runImport(false, 'mine')}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 bg-white hover:bg-slate-100 disabled:opacity-40"
+                >
+                  Use my values
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

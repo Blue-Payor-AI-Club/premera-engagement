@@ -5,6 +5,7 @@ import UsersTab from '../components/superadmin/UsersTab'
 import RequestsTab from '../components/superadmin/RequestsTab'
 import InvitesTab from '../components/superadmin/InvitesTab'
 import NotificationsTab from '../components/superadmin/NotificationsTab'
+import SignInTab from '../components/superadmin/SignInTab'
 import EmailLogTab from '../components/superadmin/EmailLogTab'
 import { useResource } from '../hooks/useResource'
 import { adminApi } from '../lib/adminApi'
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'requests', label: 'Access requests', icon: UserCheck },
   { key: 'invites', label: 'Invitations', icon: Send },
   { key: 'notifications', label: 'Email notifications', icon: Bell },
+  { key: 'signin', label: 'Sign-in', icon: ShieldCheck },
   { key: 'emails', label: 'Email log', icon: Mail },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
@@ -64,6 +66,7 @@ export default function SuperAdmin() {
           ))}
         {tab === 'invites' && <InvitesTab />}
         {tab === 'notifications' && <NotificationsTab />}
+        {tab === 'signin' && <SignInTab />}
         {tab === 'emails' && <EmailLogTab />}
       </div>
     </div>

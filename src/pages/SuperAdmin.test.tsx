@@ -11,6 +11,7 @@ vi.mock('../lib/adminApi', () => ({
     listAccessRequests: vi.fn(), approveRequest: vi.fn(), rejectRequest: vi.fn(),
     listInvites: vi.fn(), createInvite: vi.fn(), resendInvite: vi.fn(), revokeInvite: vi.fn(),
     listNotificationSettings: vi.fn(), saveNotificationSetting: vi.fn(),
+    getAllowedDomains: vi.fn(), saveAllowedDomains: vi.fn(),
     listEmailLog: vi.fn(), retryEmail: vi.fn(), listAudit: vi.fn(),
   },
 }))
@@ -267,5 +268,41 @@ describe('SuperAdmin — email log', () => {
     expect(await screen.findAllByRole('button', { name: 'Retry' })).toHaveLength(1)
     await u.click(screen.getByRole('button', { name: 'Retry' }))
     expect(adminApi.retryEmail).toHaveBeenCalledWith('1')
+  })
+})
+
+describe('SuperAdmin — sign-in domains', () => {
+  it('shows the allowed domains and saves an edited list (normalised, one per line)', async () => {
+    vi.mocked(adminApi.getAllowedDomains)
+      .mockResolvedValueOnce({ domains: ['ust.com', 'premera.com'] })
+      .mockResolvedValue({ domains: ['ust.com', 'premera.com', 'partner.org'], updatedAt: 'now' }) // what the server returns after the save
+    vi.mocked(adminApi.saveAllowedDomains).mockResolvedValue({ domains: ['ust.com', 'premera.com', 'partner.org'], updatedAt: 'now' })
+    const u = userEvent.setup()
+    renderPage()
+    await u.click(await screen.findByRole('tab', { name: /sign-in/i }))
+
+    const box = await screen.findByLabelText('Allowed email domains')
+    expect(box).toHaveValue('ust.com' + String.fromCharCode(10) + 'premera.com')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+    await u.type(box, '{Enter}@Partner.org')
+    await u.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(adminApi.saveAllowedDomains).toHaveBeenCalledWith(['ust.com', 'premera.com', 'partner.org'])
+    expect(await screen.findByText('Saved')).toBeInTheDocument()
+  })
+
+  it("shows the server's reason when a list is refused", async () => {
+    vi.mocked(adminApi.getAllowedDomains).mockResolvedValue({ domains: ['ust.com'] })
+    vi.mocked(adminApi.saveAllowedDomains).mockRejectedValue(new Error('Keep your own domain (@ust.com) in the list, or you would lock yourself out.'))
+    const u = userEvent.setup()
+    renderPage()
+    await u.click(await screen.findByRole('tab', { name: /sign-in/i }))
+    const box = await screen.findByLabelText('Allowed email domains')
+    await u.clear(box)
+    await u.type(box, 'premera.com')
+    await u.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText(/lock yourself out/)).toBeInTheDocument()
   })
 })

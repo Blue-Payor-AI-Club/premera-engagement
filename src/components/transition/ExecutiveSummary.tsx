@@ -2,15 +2,16 @@ import { useId, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { TransitionData } from '../../data/transitionData'
 import StatusChip from './StatusChip'
+import VisibleToPremera from '../VisibleToPremera'
 
 function SectionHeading({ children }: { children: string }) {
   return <h3 className="text-sm font-bold uppercase tracking-wide text-[#0b2a4a] mb-2">{children}</h3>
 }
 
-function BulletList({ items }: { items: string[] }) {
+function BulletList({ items, marked }: { items: string[]; marked?: string[] }) {
   return (
     <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
-      {items.map((t, i) => <li key={i}>{t}</li>)}
+      {items.map((t, i) => <li key={i}>{t}<VisibleToPremera flagged={marked?.includes(t)} /></li>)}
     </ul>
   )
 }
@@ -21,7 +22,7 @@ function Contacts({ title, people }: { title: string; people: TransitionData['pr
       {people.map((p, i) => (
         <div key={i} className="flex flex-wrap gap-x-2 text-[13px]">
           <dt className="font-bold text-slate-800">{p.role}:</dt>
-          <dd className="text-slate-600">{p.name}</dd>
+          <dd className="text-slate-600">{p.name}<VisibleToPremera flagged={p.needsPremeraAttention} /></dd>
         </div>
       ))}
     </dl>
@@ -63,7 +64,7 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
 
         <div>
           <SectionHeading>Key Accomplishments</SectionHeading>
-          <BulletList items={summary.accomplishments} />
+          <BulletList items={summary.accomplishments} marked={summary.premeraVisible} />
         </div>
 
         <div>
@@ -71,7 +72,7 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
           <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
             {summary.priorities.map((p, i) => (
               <li key={i}>
-                <strong className="font-bold text-slate-900">{p.title}</strong> {p.text}
+                <strong className="font-bold text-slate-900">{p.title}</strong> {p.text}<VisibleToPremera flagged={p.needsPremeraAttention} />
               </li>
             ))}
           </ul>
@@ -79,12 +80,12 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
 
         <div>
           <SectionHeading>Key Risk</SectionHeading>
-          <BulletList items={summary.risks} />
+          <BulletList items={summary.risks} marked={summary.premeraVisible} />
         </div>
 
         <div>
           <SectionHeading>Executive Focus Required</SectionHeading>
-          <BulletList items={summary.executiveFocus} />
+          <BulletList items={summary.executiveFocus} marked={summary.premeraVisible} />
         </div>
       </div>
     </section>

@@ -7,7 +7,8 @@ import { TRANSITION_DATA } from '../data/transitionData'
 import userEvent from '@testing-library/user-event'
 
 const mockUseAuth = vi.fn()
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/AuthContext', async (importActual) => ({
+  ...(await importActual<typeof import('../context/AuthContext')>()),
   useAuth: () => mockUseAuth(),
 }))
 

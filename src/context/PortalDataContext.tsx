@@ -66,6 +66,12 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
+  // The cached copy is whatever the last user's role was allowed to see (Premera users get a
+  // filtered document), so it must not outlive their session.
+  useEffect(() => {
+    if (!authLoading && !token) localStorage.removeItem(STORAGE_KEY)
+  }, [authLoading, token])
+
   // Fetch from API once auth is resolved; re-fetch if token changes
   useEffect(() => {
     if (authLoading || !token) return

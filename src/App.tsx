@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import UstViewNotice from './components/UstViewNotice'
 import { Menu, X, BarChart3, AlertTriangle, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
 import './index.css'
 import ProgramLevel from './pages/ProgramLevel'
@@ -428,6 +429,7 @@ function AuthenticatedApp() {
       <TourGuide />
       <TopBar />
       <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 sm:py-8">
+        <UstViewNotice />
         <Routes>
           <Route path="/" element={<Navigate to="/program" replace />} />
           <Route path="/program" element={<ProgramLevel />} />

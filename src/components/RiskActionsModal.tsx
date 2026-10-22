@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { type IssueRow, type ActionStatus } from '../data/portalData'
 import StatusDot from './StatusDot'
+import VisibleToPremera from './VisibleToPremera'
 
 // Read-only now that Excel is the sole source of truth for portal data — action
 // status comes from the RiskActions sheet's Action Status column like everything
@@ -108,7 +109,9 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                     const s = ACTION_STATUS[a.actionStatus] ?? ACTION_STATUS.open
                     return (
                       <tr key={a.id} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
-                        <td className="px-3 py-2.5 text-slate-700">{a.action}</td>
+                        <td className="px-3 py-2.5 text-slate-700">
+                          {a.action}<VisibleToPremera flagged={a.needsPremeraAttention} />
+                        </td>
                         <td className="px-3 py-2.5 font-medium" style={{ color: '#0067b1' }}>{a.owner}</td>
                         <td className="px-3 py-2.5 text-slate-600">{a.dueDate}</td>
                         <td className="px-3 py-2.5 text-center">
@@ -131,7 +134,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                   const s = ACTION_STATUS[a.actionStatus] ?? ACTION_STATUS.open
                   return (
                     <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-sm text-slate-700 mb-2">{a.action}</p>
+                      <p className="text-sm text-slate-700 mb-2">{a.action}<VisibleToPremera flagged={a.needsPremeraAttention} /></p>
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="text-xs">
                           <span className="font-semibold" style={{ color: '#0067b1' }}>{a.owner}</span>

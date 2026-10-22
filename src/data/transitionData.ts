@@ -13,11 +13,15 @@ import type { StatusKey } from './status'
 export interface TransitionContact {
   role: string
   name: string
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface SummaryPriority {
   title: string
   text: string
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface ExecutiveSummaryData {
@@ -26,6 +30,8 @@ export interface ExecutiveSummaryData {
   priorities: SummaryPriority[]
   risks: string[]
   executiveFocus: string[]
+  /** Texts of the accomplishment/risk/focus lines marked for Premera. */
+  premeraVisible?: string[]
 }
 
 export interface NoteItem {
@@ -56,6 +62,8 @@ export interface DashboardRow {
   notes?: NoteItem[]
   /** When set, this row's Notes cell is merged down over that many rows in total (itself included). */
   notesRowSpan?: number
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface TowerGroup {
@@ -70,6 +78,8 @@ export interface RaidItem {
   owner: string
   dueDate: string
   status: string
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface TransitionData {

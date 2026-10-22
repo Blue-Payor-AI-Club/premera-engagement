@@ -17,6 +17,8 @@ export interface MilestoneRow {
   due: string
   revised: string
   status: StatusKey
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface MilestoneSection {
@@ -35,6 +37,8 @@ export interface RiskAction {
   owner: string
   dueDate: string
   actionStatus: ActionStatus
+  /** Premera stakeholders only receive rows where this is true. */
+  needsPremeraAttention?: boolean
 }
 
 export interface IssueRow {

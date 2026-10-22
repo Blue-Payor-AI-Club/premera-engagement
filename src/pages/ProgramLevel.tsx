@@ -25,6 +25,7 @@ import TransitionTab from '../components/transition/TransitionTab'
 import { TRANSITION_DATA } from '../data/transitionData'
 import StatusDot from '../components/StatusDot'
 import QuickFeedback from '../components/QuickFeedback'
+import VisibleToPremera from '../components/VisibleToPremera'
 import { usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS } from '../data/workstreamIcons'
@@ -516,6 +517,7 @@ export default function ProgramLevel() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                   <VisibleToPremera flagged={w.needsPremeraAttention} />
                     {w.needsPremeraAttention && (
                       <button
                         onClick={() => navigate('/risks')}

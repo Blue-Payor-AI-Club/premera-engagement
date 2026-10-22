@@ -3,6 +3,7 @@ import type { StatusKey } from '../../data/status'
 import type { DashboardRow, TransitionData } from '../../data/transitionData'
 import StatusDot from '../StatusDot'
 import StatusChip from './StatusChip'
+import VisibleToPremera from '../VisibleToPremera'
 
 // Header colours are taken from the source slide; body rows use a plain white/slate
 // zebra instead of the slide's per-tower fills, which read as noise on screen.
@@ -76,7 +77,7 @@ function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
                       {group.tower}
                     </th>
                   )}
-                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}</th>
+                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /></th>
                   <Status status={row.planning.status} />
                   <td className={td}>{row.planning.start}</td>
                   <td className={td}>{row.planning.sowSubmit}</td>
@@ -116,7 +117,9 @@ function RaidTable({ items }: { items: TransitionData['raid'] }) {
           {items.map((r, i) => (
             <tr key={i} className={i % 2 === 0 ? 'bg-white' : STRIPE_ODD}>
               <td className={`${td} text-center font-semibold`}>{r.type}</td>
-              <td className={`${td} text-[12px] align-top`}>{r.description}</td>
+              <td className={`${td} text-[12px] align-top`}>
+                {r.description}<VisibleToPremera flagged={r.needsPremeraAttention} />
+              </td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.mitigation.length > 1 ? (
                   <ul className="list-disc pl-4 space-y-1">{r.mitigation.map((m, j) => <li key={j}>{m}</li>)}</ul>

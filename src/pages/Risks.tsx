@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import VisibleToPremera from '../components/VisibleToPremera'
 import { AlertTriangle, Flag, Filter, CalendarDays } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
 import StatusDot from '../components/StatusDot'
@@ -81,7 +82,7 @@ function IssueGroup({
                     Premera
                   </span>
                 )}
-                {row.issue}
+                {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
               </td>
               <td className="px-4 py-3 align-top">
                 <ul className="space-y-1">
@@ -128,7 +129,7 @@ function IssueGroup({
                     Premera
                   </span>
                 )}
-                {row.issue}
+                {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button

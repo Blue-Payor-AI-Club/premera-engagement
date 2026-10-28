@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import VisibleToPremera from '../components/VisibleToPremera'
 import { AlertTriangle, Flag, Filter, CalendarDays } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
+import Legend from '../components/Legend'
 import StatusDot from '../components/StatusDot'
 import RiskActionsModal from '../components/RiskActionsModal'
 import { usePortalData } from '../context/PortalDataContext'
@@ -249,8 +250,12 @@ export default function Risks() {
               : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
           }`}
         >
-          {showAll ? 'Showing All Statuses' : 'Show Resolved / On Track'}
+          {showAll ? 'Showing All Statuses' : 'Include Resolved / On Track'}
         </button>
+      </div>
+
+      <div className="mb-4">
+        <Legend />
       </div>
 
       <div className="space-y-6">

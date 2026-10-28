@@ -19,6 +19,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
   const [draft, setDraft] = useState('')
   const [popPos, setPopPos] = useState<{ top: number; left: number } | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [needsText, setNeedsText] = useState(false)
 
   const path = `/quick-feedback/${encodeURIComponent(itemId)}`
 
@@ -88,6 +89,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
     const left = Math.max(8, Math.min(rect.right - popupWidth, window.innerWidth - popupWidth - 8))
     setPopPos({ top: rect.bottom + 6, left })
     setDraft(savedComment)
+    setNeedsText(false)
     setVote('down')
     setShowComment(true)
     apiFetch(path, { method: 'PUT', body: JSON.stringify({ vote: 'down', comment: savedComment }) })
@@ -95,6 +97,11 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
   }
 
   function submitComment() {
+    // Submit means "here's my concern"; Skip is the way to keep the vote without one.
+    if (!draft.trim()) {
+      setNeedsText(true)
+      return
+    }
     apiFetch(path, { method: 'PUT', body: JSON.stringify({ vote: 'down', comment: draft }) })
       .then(() => {
         setSavedComment(draft)
@@ -126,10 +133,14 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
             rows={3}
             placeholder="Describe the concern..."
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); setNeedsText(false) }}
+            aria-invalid={needsText}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           />
+          {needsText && (
+            <p role="alert" className="mt-1 text-xs text-red-600">Please describe your concern, or choose Skip.</p>
+          )}
           <div className="flex justify-end gap-2 mt-2">
             <button
               onClick={() => setShowComment(false)}

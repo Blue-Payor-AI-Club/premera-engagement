@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import VisibleToPremera from '../components/VisibleToPremera'
-import { AlertTriangle, Flag, Filter, CalendarDays } from 'lucide-react'
+import { AlertTriangle, Flag, Filter, CalendarDays, Download, Search } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
 import Legend from '../components/Legend'
 import StatusDot from '../components/StatusDot'
 import RiskActionsModal from '../components/RiskActionsModal'
 import { usePortalData } from '../context/PortalDataContext'
 import { type IssueRow, type SeverityLevel } from '../data/portalData'
+import { STATUS, type StatusKey } from '../data/status'
+import { downloadCsv } from '../lib/csv'
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 
@@ -32,6 +34,25 @@ function SeverityBadge({ value }: { value?: SeverityLevel }) {
   )
 }
 
+const ACTION_STATUS_LABEL: Record<string, string> = { open: 'Open', inProgress: 'In Progress', closed: 'Closed' }
+
+function exportIssues(rows: { division: string; issue: IssueRow }[]) {
+  downloadCsv(`risks-and-issues-${new Date().toISOString().slice(0, 10)}.csv`, [
+    ['Division', 'Risk / Issue', 'Mitigation Plan', 'Due', 'Status', 'Severity', 'Priority', 'Premera Action Required', 'Actions'],
+    ...rows.map(({ division, issue: r }) => [
+      division,
+      r.issue,
+      r.mitigations.join('\n'),
+      r.date,
+      STATUS[r.status as StatusKey]?.label ?? r.status,
+      r.severity ? SEVERITY_STYLE[r.severity].label : '',
+      r.priority ? SEVERITY_STYLE[r.priority].label : '',
+      r.premeraActionRequired ? 'Yes' : 'No',
+      (r.riskActions ?? []).map((a) => `${a.action} (${a.owner || 'no owner'}, ${ACTION_STATUS_LABEL[a.actionStatus] ?? a.actionStatus})`).join('\n'),
+    ]),
+  ])
+}
+
 // ─── Issue group ──────────────────────────────────────────────────────────────
 
 function IssueGroup({
@@ -49,7 +70,7 @@ function IssueGroup({
 }) {
   const visible = rows.filter((r) => {
     const statusOk = showAll || isAtRisk(r.status)
-    const premeraOk = !premeraOnly || r.needsPremeraAttention
+    const premeraOk = !premeraOnly || r.premeraActionRequired
     return statusOk && premeraOk
   })
 
@@ -78,7 +99,7 @@ function IssueGroup({
           {visible.map((row, i) => (
             <tr key={row.id} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
               <td className="px-4 py-3 align-top text-slate-700">
-                {row.needsPremeraAttention && (
+                {row.premeraActionRequired && (
                   <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
                     Premera
                   </span>
@@ -125,7 +146,7 @@ function IssueGroup({
           <div key={row.id} className={`px-3 py-3 ${i % 2 ? 'bg-slate-50' : 'bg-white'}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="text-sm text-slate-700 min-w-0">
-                {row.needsPremeraAttention && (
+                {row.premeraActionRequired && (
                   <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
                     Premera
                   </span>
@@ -184,6 +205,9 @@ export default function Risks() {
   const { data } = usePortalData()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
+  const [query, setQuery] = useState('')
+  const [severity, setSeverity] = useState<'' | SeverityLevel>('')
+  const [division, setDivision] = useState<'all' | 'ito' | 'bpo'>('all')
   const [premeraOnly, setPremeraOnly] = useState(false)
 
   const allIssues = useMemo(() => [
@@ -198,10 +222,18 @@ export default function Risks() {
     [selectedId, allIssues]
   )
 
+  // Search / severity / division narrow both the tables and the pills.
+  const q = query.trim().toLowerCase()
+  const matches = (r: IssueRow) =>
+    (!q || [r.issue, ...r.mitigations].some((t) => t.toLowerCase().includes(q))) && (!severity || r.severity === severity)
+  const ito = division === 'bpo' ? [] : data.program.ito.issues.filter(matches)
+  const bpo = division === 'ito' ? [] : data.program.bpo.issues.filter(matches)
+  const shown = (r: IssueRow) => (showAll || isAtRisk(r.status)) && (!premeraOnly || r.premeraActionRequired)
+
   // Counted from the same rows the status filter lists, so the pills match the tables.
-  const listed = allIssues.filter((r) => showAll || isAtRisk(r.status))
+  const listed = [...ito, ...bpo].filter((r) => showAll || isAtRisk(r.status))
   const totalAtRisk = listed.length
-  const totalPremera = listed.filter((r) => r.needsPremeraAttention).length
+  const totalPremera = listed.filter((r) => r.premeraActionRequired).length
 
   return (
     <div className="slide">
@@ -254,6 +286,48 @@ export default function Risks() {
         >
           {showAll ? 'Showing All Statuses' : 'Include Resolved / On Track'}
         </button>
+        <label className="relative w-full sm:w-56 sm:ml-2">
+          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search risks & issues"
+            aria-label="Search risks and issues"
+            className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#0067b1]"
+          />
+        </label>
+        <select
+          value={division}
+          onChange={(e) => setDivision(e.target.value as typeof division)}
+          aria-label="Division"
+          className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+        >
+          <option value="all">ITO + BPO</option>
+          <option value="ito">ITO only</option>
+          <option value="bpo">BPO only</option>
+        </select>
+        <select
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value as typeof severity)}
+          aria-label="Severity"
+          className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+        >
+          <option value="">Any severity</option>
+          {(Object.keys(SEVERITY_STYLE) as SeverityLevel[]).map((k) => (
+            <option key={k} value={k}>{SEVERITY_STYLE[k].label}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => exportIssues([
+            ...ito.filter(shown).map((issue) => ({ division: 'ITO', issue })),
+            ...bpo.filter(shown).map((issue) => ({ division: 'BPO', issue })),
+          ])}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold border border-slate-300 bg-white text-slate-600 hover:border-slate-500 transition w-full sm:w-auto sm:ml-auto"
+        >
+          <Download size={11} />
+          Export CSV
+        </button>
       </div>
 
       <div className="mb-4">
@@ -263,18 +337,21 @@ export default function Risks() {
       <div className="space-y-6">
         <IssueGroup
           title="Program Level — ITO"
-          rows={data.program.ito.issues}
+          rows={ito}
           onSelect={(r) => setSelectedId(r.id)}
           showAll={showAll}
           premeraOnly={premeraOnly}
         />
         <IssueGroup
           title="Program Level — BPO"
-          rows={data.program.bpo.issues}
+          rows={bpo}
           onSelect={(r) => setSelectedId(r.id)}
           showAll={showAll}
           premeraOnly={premeraOnly}
         />
+        {!ito.some(shown) && !bpo.some(shown) && (
+          <p className="text-sm text-slate-500 text-center py-8">No risks or issues match these filters.</p>
+        )}
       </div>
     </div>
   )

@@ -10,10 +10,10 @@ import TransitionTab from '../transition/TransitionTab'
 
 const SEVERITY_LABELS: Record<string, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
 
-function PremeraFlag() {
+function PremeraFlag({ label = 'Premera' }: { label?: string }) {
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
-      <Flag size={9} /> Premera
+      <Flag size={9} /> {label}
     </span>
   )
 }
@@ -38,6 +38,7 @@ function WorkstreamPreview({ w }: { w: Workstream }) {
             <span className="font-semibold text-sm text-slate-800">{w.name}</span>
             <StatusBadge status={w.status} />
             {w.needsPremeraAttention && <PremeraFlag />}
+            {w.premeraActionRequired && <PremeraFlag label="Action" />}
           </div>
           {w.statusMessage && <p className="text-xs text-slate-500 mt-0.5">{w.statusMessage}</p>}
           <p className="text-[11px] text-slate-400 mt-0.5">
@@ -61,6 +62,7 @@ function IssuePreview({ issue }: { issue: IssueRow }) {
       <div className="flex flex-wrap items-center gap-1.5 mb-1">
         <StatusBadge status={issue.status} />
         {issue.needsPremeraAttention && <PremeraFlag />}
+        {issue.premeraActionRequired && <PremeraFlag label="Action" />}
         {issue.severity && <span className="text-[10px] font-bold uppercase text-slate-500">Sev: {SEVERITY_LABELS[issue.severity]}</span>}
         {issue.priority && <span className="text-[10px] font-bold uppercase text-slate-500">Pri: {SEVERITY_LABELS[issue.priority]}</span>}
         {issue.date && <span className="text-[11px] text-slate-400">Due {issue.date}</span>}

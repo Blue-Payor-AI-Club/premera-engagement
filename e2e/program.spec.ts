@@ -11,7 +11,7 @@ test.describe('Program Level', () => {
     await expect(page.getByRole('tab', { name: /ITO/ })).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByText('Delivery & Operational Continuity').first()).toBeVisible()
     for (const label of ['On Track', 'At Risk', 'Delayed', 'Complete']) {
-      await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
+      await expect(page.getByText(label, { exact: true }).filter({ visible: true }).first()).toBeVisible()
     }
   })
 

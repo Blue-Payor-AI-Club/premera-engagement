@@ -48,6 +48,8 @@ export interface IssueRow {
   date: string
   status: StatusKey
   needsPremeraAttention?: boolean
+  /** "Attention required from Premera" (badge + counts). needsPremeraAttention is visibility only. */
+  premeraActionRequired?: boolean
   riskActions?: RiskAction[]
   severity?: SeverityLevel
   priority?: SeverityLevel
@@ -77,6 +79,8 @@ export interface Workstream {
   status: StatusKey
   statusMessage?: string
   needsPremeraAttention?: boolean
+  /** "Attention required from Premera" (badge + counts). needsPremeraAttention is visibility only. */
+  premeraActionRequired?: boolean
   accomplishments: string[]
   activities: string[]
   milestones?: MilestoneSection[]

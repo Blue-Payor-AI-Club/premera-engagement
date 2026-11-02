@@ -17,6 +17,8 @@ import {
   ChevronRight,
   AlertTriangle,
   Flag,
+  Download,
+  Search,
 } from 'lucide-react'
 import MilestoneTable from '../components/MilestoneTable'
 import SlideHeader from '../components/SlideHeader'
@@ -28,8 +30,9 @@ import QuickFeedback from '../components/QuickFeedback'
 import VisibleToPremera from '../components/VisibleToPremera'
 import { usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
-import { WORKSTREAM_ICON_COMPONENTS } from '../data/workstreamIcons'
+import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
+import { downloadCsv } from '../lib/csv'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
@@ -107,7 +110,10 @@ function OperationalAreaRenderer({ data }: ICellRendererParams) {
           ? <ChevronDown size={15} />
           : <ChevronRight size={15} />}
       </button>
-      <Icon size={18} className="text-slate-500 shrink-0" />
+      {/* The tooltip names the workbook's Icon value, so a mismatch is easy to spot. */}
+      <span title={WORKSTREAM_ICON_LABELS[ws.icon] ?? ws.icon} className="shrink-0 inline-flex">
+        <Icon size={18} className="text-slate-500" />
+      </span>
       <span className="font-semibold text-[#0067b1] text-sm leading-snug">
         {ws.name}<VisibleToPremera flagged={ws.needsPremeraAttention} />
       </span>
@@ -142,8 +148,7 @@ function FeedbackRenderer({ data }: ICellRendererParams) {
 function ActionRequiredRenderer({ data, context }: ICellRendererParams) {
   if (!data || isDetailRow(data)) return null
   const ws = data as WorkstreamRow
-  // Backend strips needsPremeraAttention from Workstream; derive from status instead
-  if (!ws.needsPremeraAttention && ws.status !== 'atRisk' && ws.status !== 'delayed') return null
+  if (!ws.premeraActionRequired) return null
   // Use AG-Grid context prop — the only mechanism that crosses the separate React root boundary
   const nav = (context as { navigate?: (to: string) => void })?.navigate
   return (
@@ -222,7 +227,11 @@ function ExpandMoreIcon({ sx }: { sx?: { color?: string; fontSize?: number } }) 
 
 function WsIcon({ icon }: { icon: WorkstreamIcon }) {
   const Icon = ICONS[icon] ?? Share2
-  return <Icon size={18} className="text-slate-500 shrink-0" />
+  return (
+    <span title={WORKSTREAM_ICON_LABELS[icon] ?? icon} className="shrink-0 inline-flex">
+      <Icon size={18} className="text-slate-500" />
+    </span>
+  )
 }
 
 function Bullets({ items }: { items: string[] }) {
@@ -266,7 +275,7 @@ function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
 function RisksSection({ issues }: { issues: IssueRow[] }) {
   const atRiskCount = issues.filter(r => isAtRisk(r.status)).length
   // Of the open (at-risk/delayed) items listed below, those flagged for Premera.
-  const premeraCount = issues.filter(r => isAtRisk(r.status) && r.needsPremeraAttention).length
+  const premeraCount = issues.filter(r => isAtRisk(r.status) && r.premeraActionRequired).length
   if (atRiskCount === 0) return null
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
@@ -307,6 +316,13 @@ export default function ProgramLevel() {
   const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const p = data.program[division]
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'' | StatusKey>('')
+  // The grid and the phone list show the filtered workstreams; the scorecard stays on all of them.
+  const q = query.trim().toLowerCase()
+  const workstreams = p.workstreams.filter((w) =>
+    (!q || [w.name, w.statusMessage ?? '', ...w.accomplishments, ...w.activities].some((t) => t.toLowerCase().includes(q))) &&
+    (!statusFilter || w.status === statusFilter))
   const isTransition = tab === 'transition'
   // Synced from the workbook; the bundled copy only covers an API that predates the block.
   const transition = data.transition ?? TRANSITION_DATA
@@ -330,7 +346,7 @@ export default function ProgramLevel() {
   // Build row data: workstream rows interleaved with full-width detail rows
   const rowData = useMemo<GridRow[]>(() => {
     const rows: GridRow[] = []
-    for (const ws of p.workstreams) {
+    for (const ws of workstreams) {
       const expanded = expandedIds.has(ws.id)
       rows.push(ws)
       if (expanded) {
@@ -344,7 +360,7 @@ export default function ProgramLevel() {
       }
     }
     return rows
-  }, [p.workstreams, expandedIds])
+  }, [workstreams, expandedIds])
 
   const columnDefs = useMemo<ColDef[]>(() => [
     {
@@ -377,7 +393,7 @@ export default function ProgramLevel() {
     },
     {
       headerName: 'Action Required',
-      field: 'needsPremeraAttention',
+      field: 'premeraActionRequired',
       width: 145,
       sortable: true,
       resizable: true,
@@ -467,6 +483,49 @@ export default function ProgramLevel() {
       {isTransition ? <TransitionTab data={transition} /> : (
       <div className="space-y-6">
 
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <label className="relative w-full sm:w-64">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search operational areas"
+              aria-label="Search operational areas"
+              className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#0067b1]"
+            />
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            aria-label="Status"
+            className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+          >
+            <option value="">Any status</option>
+            {LEGEND_ORDER.map((k) => <option key={k} value={k}>{STATUS[k].label}</option>)}
+          </select>
+          <button
+            onClick={() => downloadCsv(`${division}-program-${new Date().toISOString().slice(0, 10)}.csv`, [
+              ['Operational Area', 'Status', 'Status Note', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
+              ...workstreams.map((w) => [
+                w.name,
+                STATUS[w.status as StatusKey]?.label ?? w.status,
+                w.statusMessage ?? '',
+                w.premeraActionRequired ? 'Yes' : 'No',
+                w.accomplishments.join('\n'),
+                w.activities.join('\n'),
+              ]),
+            ])}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-300 bg-white text-slate-600 hover:border-slate-500 transition sm:ml-auto"
+          >
+            <Download size={11} />
+            Export CSV
+          </button>
+        </div>
+        {workstreams.length === 0 && (
+          <p className="text-sm text-slate-500 text-center py-6">No operational areas match these filters.</p>
+        )}
+
         {/* ── AG-Grid (desktop md+) ── */}
         <div data-tour="workstream-grid" className="card overflow-hidden hidden md:block">
           <ExpandContext.Provider value={expandContext}>
@@ -493,7 +552,7 @@ export default function ProgramLevel() {
 
         {/* ── Accordion (mobile <md) ── */}
         <div className="md:hidden card overflow-hidden">
-          {p.workstreams.map((w) => (
+          {workstreams.map((w) => (
             <Accordion
               key={w.id}
               disableGutters
@@ -534,7 +593,7 @@ export default function ProgramLevel() {
                   </div>
                   <div className="flex items-center gap-2">
                    <VisibleToPremera flagged={w.needsPremeraAttention} />
-                    {w.needsPremeraAttention && (
+                    {w.premeraActionRequired && (
                       <button
                         onClick={() => navigate('/risks')}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"

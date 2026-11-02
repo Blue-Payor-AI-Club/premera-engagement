@@ -8,13 +8,14 @@ const FALLBACK_AREAS = [
   'Claims Operations',
   'Provider Data Management',
   'Database Administration',
-  'End‑to‑End Testing',
+  'End-to-End Testing',
   'Enrollment & Billing',
   'Product Configuration',
   'Microsoft 365 Support',
   'Provider Appeals & Grievances (Appian)',
   'Provider Contact Center',
   'Service Desk / IT Operations Center',
+  'Other',
 ]
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -174,10 +175,14 @@ export default function Feedback() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1.5">Details</label>
+            <label htmlFor="feedback-details" className="block text-sm font-medium text-slate-600 mb-1.5">
+              Details{area === 'Other' && <span className="text-red-600"> (required for Other — what is it about?)</span>}
+            </label>
             <textarea
+              id="feedback-details"
               value={details}
               onChange={(e) => setDetails(e.target.value)}
+              required={area === 'Other'}
               className="w-full border border-slate-300 rounded-lg p-2.5 text-sm h-32 focus:outline-none focus:ring-2 focus:ring-[#0067b1]/40"
               placeholder="Share what's working well or what UST should improve..."
             />

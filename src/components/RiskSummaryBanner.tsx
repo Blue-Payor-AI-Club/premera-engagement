@@ -4,8 +4,9 @@ import { type IssueRow } from '../data/portalData'
 
 export default function RiskSummaryBanner({ issues }: { issues: IssueRow[] }) {
   const navigate = useNavigate()
-  const atRiskCount = issues.filter((i) => i.status === 'atRisk' || i.status === 'delayed').length
-  const premeraCount = issues.filter((i) => i.needsPremeraAttention).length
+  const isOpen = (s: string) => s === 'atRisk' || s === 'delayed'
+  const atRiskCount = issues.filter((i) => isOpen(i.status)).length
+  const premeraCount = issues.filter((i) => isOpen(i.status) && i.premeraActionRequired).length
 
   if (atRiskCount === 0) return null
 

@@ -41,7 +41,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle size={15} className="text-amber-500 shrink-0" />
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Risks &amp; Issues</span>
-              {issue.needsPremeraAttention && (
+              {issue.premeraActionRequired && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
                   Attention required from Premera
                 </span>

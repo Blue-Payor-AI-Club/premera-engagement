@@ -17,7 +17,7 @@ describe('Transition tab — Executive Summary', () => {
     }
     expect(screen.getByText(/Delays in MSA and SOW approvals/)).toBeVisible()
     expect(screen.getByText(/Accelerate MSA and SOW approval timelines\./)).toBeVisible()
-    expect(within(toggle).getByText('At Risk')).toBeInTheDocument()
+    expect(within(toggle).getByText('Overall: At Risk')).toBeInTheDocument()
   })
 
   it('shows the contacts and the bold lead-ins on the priorities', () => {

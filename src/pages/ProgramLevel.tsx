@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import type {
@@ -29,13 +29,13 @@ import VisibleToPremera from '../components/VisibleToPremera'
 import { usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS } from '../data/workstreamIcons'
-import { STATUS, type StatusKey } from '../data/status'
+import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkstreamRow = Workstream & { _expanded: boolean }
+type WorkstreamRow = Workstream
 
 interface DetailRow {
   _rowType: 'detail'
@@ -52,7 +52,12 @@ const isDetailRow = (row: unknown): row is DetailRow =>
 
 // ─── React context — propagates into AG-Grid cell renderers ───────────────────
 
-const ExpandContext = createContext<(id: string) => void>(() => {})
+// Expanded state is read from here, not from row data: AG-Grid only re-renders a cell
+// when its field ('name') changes, so an expanded flag on the row data would go stale.
+const ExpandContext = createContext<{ expandedIds: Set<string>; toggle: (id: string) => void }>({
+  expandedIds: new Set(),
+  toggle: () => {},
+})
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -85,23 +90,27 @@ const portalTheme = themeQuartz.withParams({
 // ─── Cell renderers ───────────────────────────────────────────────────────────
 
 function OperationalAreaRenderer({ data }: ICellRendererParams) {
-  const toggleExpand = useContext(ExpandContext)
+  const { expandedIds, toggle } = useContext(ExpandContext)
   if (!data || isDetailRow(data)) return null
   const ws = data as WorkstreamRow
+  const expanded = expandedIds.has(ws.id)
   const Icon = ICONS[ws.icon] ?? Share2
   return (
     <div className="flex items-center gap-2 h-full py-1">
       <button
-        onClick={e => { e.stopPropagation(); toggleExpand(ws.id) }}
+        onClick={e => { e.stopPropagation(); toggle(ws.id) }}
         className="shrink-0 text-slate-400 hover:text-[#0067b1] transition"
-        title={ws._expanded ? 'Collapse milestones' : 'Expand milestones'}
+        title={expanded ? 'Collapse milestones' : 'Expand milestones'}
+        aria-expanded={expanded}
       >
-        {ws._expanded
+        {expanded
           ? <ChevronDown size={15} />
           : <ChevronRight size={15} />}
       </button>
       <Icon size={18} className="text-slate-500 shrink-0" />
-      <span className="font-semibold text-[#0067b1] text-sm leading-snug">{ws.name}</span>
+      <span className="font-semibold text-[#0067b1] text-sm leading-snug">
+        {ws.name}<VisibleToPremera flagged={ws.needsPremeraAttention} />
+      </span>
     </div>
   )
 }
@@ -166,11 +175,27 @@ function BulletsRenderer({ value }: ICellRendererParams) {
   )
 }
 
-function MilestoneDetailRenderer({ data }: ICellRendererParams) {
+function MilestoneDetailRenderer({ data, node, api }: ICellRendererParams) {
   const row = data as DetailRow
+  const ref = useRef<HTMLDivElement>(null)
+  // Long milestone text wraps, so size the full-width row to its real content
+  // instead of the per-row estimate in getRowHeight.
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      const h = el.offsetHeight
+      if (h && h !== node.rowHeight) {
+        node.setRowHeight(h)
+        api.onRowHeightChanged()
+      }
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [node, api])
   if (!row) return null
   return (
-    <div className="px-6 py-4 bg-[#f8fafc] border-l-4 border-[#0067b1]">
+    <div ref={ref} className="px-6 py-4 bg-[#f8fafc] border-l-4 border-[#0067b1] whitespace-normal">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
           Key Milestones — {row.name}
@@ -219,32 +244,20 @@ function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
     acc[ws.status] = (acc[ws.status] ?? 0) + 1
     return acc
   }, {})
-  const onTrack = counts['onTrack'] ?? 0
-  const atRisk = (counts['atRisk'] ?? 0) + (counts['delayed'] ?? 0)
-  const complete = counts['complete'] ?? 0
 
   return (
     <div data-tour="scorecard" className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 rounded-lg border border-slate-200 bg-white shadow-sm">
       <span className="text-lg font-bold text-slate-500 tracking-wide">
         Program Scorecard : {total} Operational Areas
       </span>
+      {/* One pill per status, zeros included, so the pills add up to the total. */}
       <div className="flex flex-wrap gap-2 ml-auto">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-green-50 border border-green-200">
-          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: '#1aa260' }} />
-          <span className="text-xs font-semibold text-green-800">On Track: {onTrack}</span>
-        </div>
-        {atRisk > 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: '#f2b705' }} />
-            <span className="text-xs font-semibold text-amber-800">At Risk / Delayed: {atRisk}</span>
+        {LEGEND_ORDER.map((k) => (
+          <div key={k} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: STATUS[k].color }} />
+            <span className="text-xs font-semibold text-slate-700">{STATUS[k].label}: {counts[k] ?? 0}</span>
           </div>
-        )}
-        {complete > 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-50 border border-purple-200">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: '#8e44ad' }} />
-            <span className="text-xs font-semibold text-purple-800">Complete: {complete}</span>
-          </div>
-        )}
+        ))}
       </div>
     </div>
   )
@@ -252,7 +265,8 @@ function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
 
 function RisksSection({ issues }: { issues: IssueRow[] }) {
   const atRiskCount = issues.filter(r => isAtRisk(r.status)).length
-  const premeraCount = issues.filter(r => r.needsPremeraAttention).length
+  // Of the open (at-risk/delayed) items listed below, those flagged for Premera.
+  const premeraCount = issues.filter(r => isAtRisk(r.status) && r.needsPremeraAttention).length
   if (atRiskCount === 0) return null
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
@@ -305,6 +319,8 @@ export default function ProgramLevel() {
     })
   }, [])
 
+  const expandContext = useMemo(() => ({ expandedIds, toggle: toggleExpand }), [expandedIds, toggleExpand])
+
   const handleTabChange = useCallback((k: ProgramTab) => {
     setTab(k)
     if (k !== 'transition') setDivision(k)
@@ -316,7 +332,7 @@ export default function ProgramLevel() {
     const rows: GridRow[] = []
     for (const ws of p.workstreams) {
       const expanded = expandedIds.has(ws.id)
-      rows.push({ ...ws, _expanded: expanded })
+      rows.push(ws)
       if (expanded) {
         rows.push({
           _rowType: 'detail',
@@ -453,7 +469,7 @@ export default function ProgramLevel() {
 
         {/* ── AG-Grid (desktop md+) ── */}
         <div data-tour="workstream-grid" className="card overflow-hidden hidden md:block">
-          <ExpandContext.Provider value={toggleExpand}>
+          <ExpandContext.Provider value={expandContext}>
             <AgGridReact
               theme={portalTheme}
               rowData={rowData as WorkstreamRow[]}

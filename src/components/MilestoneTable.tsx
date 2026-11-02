@@ -53,7 +53,7 @@ export default function MilestoneTable({
               </tr>
               {section.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100">
-                  <td className="px-3 py-1.5 text-slate-700">
+                  <td className="px-3 py-1.5 text-slate-700 break-words">
                     {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />
                   </td>
                   <td className="px-3 py-1.5 text-slate-600">{row.due}</td>

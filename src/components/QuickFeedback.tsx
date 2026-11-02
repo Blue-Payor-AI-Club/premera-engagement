@@ -6,6 +6,11 @@ import { useAuth } from '../context/AuthContext'
 
 type Vote = 'up' | 'down'
 
+// Matches the API's quick-feedback comment limit.
+export const MAX_COMMENT = 1000
+// Rough popup height, used to open it above the button when there's no room below.
+const POPUP_HEIGHT = 210
+
 interface QfEntry {
   vote: Vote
   comment?: string
@@ -20,6 +25,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
   const [popPos, setPopPos] = useState<{ top: number; left: number } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [needsText, setNeedsText] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
 
   const path = `/quick-feedback/${encodeURIComponent(itemId)}`
 
@@ -37,10 +43,14 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
       .catch(() => { /* API unavailable — start with no vote */ })
   }, [authLoading, path, token])
 
-  // Close popup on any scroll (capture phase) or resize
+  // Close popup on any page scroll (capture phase) or resize. Scrolls inside the popup
+  // (the textarea scrolling itself once the text passes 3 lines) must not close it.
   useEffect(() => {
     if (!showComment) return
-    const close = () => setShowComment(false)
+    const close = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest('[data-qf-pop]')) return
+      setShowComment(false)
+    }
     window.addEventListener('scroll', close, true)
     window.addEventListener('resize', close)
     return () => {
@@ -87,9 +97,12 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
     const rect = e.currentTarget.getBoundingClientRect()
     const popupWidth = 256
     const left = Math.max(8, Math.min(rect.right - popupWidth, window.innerWidth - popupWidth - 8))
-    setPopPos({ top: rect.bottom + 6, left })
+    const below = rect.bottom + 6
+    const top = below + POPUP_HEIGHT > window.innerHeight ? Math.max(8, rect.top - POPUP_HEIGHT - 6) : below
+    setPopPos({ top, left })
     setDraft(savedComment)
     setNeedsText(false)
+    setSaveFailed(false)
     setVote('down')
     setShowComment(true)
     apiFetch(path, { method: 'PUT', body: JSON.stringify({ vote: 'down', comment: savedComment }) })
@@ -102,6 +115,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
       setNeedsText(true)
       return
     }
+    setSaveFailed(false)
     apiFetch(path, { method: 'PUT', body: JSON.stringify({ vote: 'down', comment: draft }) })
       .then(() => {
         setSavedComment(draft)
@@ -109,7 +123,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
         setConfirming(true)
         setTimeout(() => setConfirming(false), 3500)
       })
-      .catch(() => setShowComment(false))
+      .catch(() => setSaveFailed(true)) // keep the popup (and the typed text) open
   }
 
   // Portal renders outside any ancestor transform/overflow — fixes AG-Grid clip + scroll drift
@@ -133,11 +147,16 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
             rows={3}
             placeholder="Describe the concern..."
             value={draft}
+            maxLength={MAX_COMMENT}
             onChange={(e) => { setDraft(e.target.value); setNeedsText(false) }}
             aria-invalid={needsText}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           />
+          <p className="text-right text-[10px] text-slate-400">{draft.length} / {MAX_COMMENT}</p>
+          {saveFailed && (
+            <p role="alert" className="mt-1 text-xs text-red-600">Couldn't save your concern. Please try again.</p>
+          )}
           {needsText && (
             <p role="alert" className="mt-1 text-xs text-red-600">Please describe your concern, or choose Skip.</p>
           )}

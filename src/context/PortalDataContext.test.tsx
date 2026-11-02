@@ -4,8 +4,9 @@ import { PortalDataProvider, usePortalData } from './PortalDataContext'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import * as api from '../lib/api'
 
+const auth = vi.hoisted(() => ({ token: 'tok_test' as string | null }))
 vi.mock('./AuthContext', () => ({
-  useAuth: () => ({ loading: false, token: 'tok_test' }),
+  useAuth: () => ({ loading: false, token: auth.token }),
 }))
 
 function jsonResponse(body: unknown, headers: Record<string, string> = {}): Response {
@@ -32,6 +33,7 @@ function Consumer() {
 
 beforeEach(() => {
   localStorage.clear()
+  auth.token = 'tok_test'
 })
 
 afterEach(() => {
@@ -39,6 +41,17 @@ afterEach(() => {
 })
 
 describe('PortalDataProvider', () => {
+  it('signing out drops the previous user document from memory, not just storage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(samplePortalData({ asOf: 'ust-doc' }))))
+    const { rerender } = render(<PortalDataProvider><Consumer /></PortalDataProvider>)
+    await waitFor(() => expect(screen.getByTestId('asOf').textContent).toBe('ust-doc'))
+
+    auth.token = null
+    rerender(<PortalDataProvider><Consumer /></PortalDataProvider>)
+    await waitFor(() => expect(screen.getByTestId('asOf').textContent).toBe(''))
+    expect(localStorage.getItem('ustpremera_portaldata_v8')).toBeNull()
+  })
+
   it('fetches the document on mount once auth resolves', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(samplePortalData({ asOf: 'from-server' }), { ETag: '"3"' })))
 

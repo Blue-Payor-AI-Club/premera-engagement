@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QuickFeedback from './QuickFeedback'
 import { AuthContext } from '../context/AuthContext'
@@ -47,5 +47,41 @@ describe('QuickFeedback thumbs down', () => {
     await userEvent.click(screen.getByTitle('Needs attention'))
     await userEvent.click(screen.getByRole('button', { name: 'Skip' }))
     expect(screen.queryByPlaceholderText('Describe the concern...')).toBeNull()
+  })
+
+  it('stays open when the textarea scrolls itself, but closes on a page scroll', async () => {
+    renderIt()
+    await userEvent.click(screen.getByTitle('Needs attention'))
+    const box = screen.getByPlaceholderText('Describe the concern...')
+    fireEvent.scroll(box)
+    expect(screen.getByPlaceholderText('Describe the concern...')).toBeInTheDocument()
+    fireEvent.scroll(document)
+    expect(screen.queryByPlaceholderText('Describe the concern...')).toBeNull()
+  })
+
+  it('a failed save keeps the popup and the typed text', async () => {
+    renderIt()
+    await userEvent.click(screen.getByTitle('Needs attention'))
+    await userEvent.type(screen.getByPlaceholderText('Describe the concern...'), 'Dates slipped')
+    mockFetch.mockRejectedValueOnce(new Error('offline'))
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't save")
+    expect(screen.getByPlaceholderText('Describe the concern...')).toHaveValue('Dates slipped')
+  })
+
+  it('caps the concern at 1000 characters and shows the count', async () => {
+    renderIt()
+    await userEvent.click(screen.getByTitle('Needs attention'))
+    expect(screen.getByPlaceholderText('Describe the concern...')).toHaveAttribute('maxLength', '1000')
+    expect(screen.getByText('0 / 1000')).toBeInTheDocument()
+  })
+
+  it('opens above the button when there is no room below', async () => {
+    renderIt()
+    const button = screen.getByTitle('Needs attention')
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ top: window.innerHeight - 30, bottom: window.innerHeight - 10, left: 300, right: 320 } as DOMRect)
+    await userEvent.click(button)
+    const pop = screen.getByPlaceholderText('Describe the concern...').closest('[data-qf-pop]') as HTMLElement
+    expect(parseFloat(pop.style.top)).toBeLessThan(window.innerHeight - 30)
   })
 })

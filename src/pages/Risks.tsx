@@ -198,8 +198,10 @@ export default function Risks() {
     [selectedId, allIssues]
   )
 
-  const totalAtRisk = allIssues.filter((r) => isAtRisk(r.status)).length
-  const totalPremera = allIssues.filter((r) => r.needsPremeraAttention).length
+  // Counted from the same rows the status filter lists, so the pills match the tables.
+  const listed = allIssues.filter((r) => showAll || isAtRisk(r.status))
+  const totalAtRisk = listed.length
+  const totalPremera = listed.filter((r) => r.needsPremeraAttention).length
 
   return (
     <div className="slide">

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
+import { DEFAULT_PORTAL_DATA, type PortalData, type ProgramTab } from '../data/portalData'
 import { apiFetch } from '../lib/api'
 import { useAuth } from './AuthContext'
 
@@ -31,6 +31,16 @@ const PortalDataContext = createContext<Ctx | null>(null)
 // Exported (not just the hook) so tests can inject a value directly instead of
 // mocking apiFetch and fighting the mount effect — see PortalDataContext.test.tsx.
 export { PortalDataContext }
+
+const emptyProgram = (p: ProgramTab): ProgramTab => ({ ...p, workstreams: [], towers: [], milestones: [], issues: [] })
+
+/** No rows at all — what a signed-out session holds, so nothing of the previous user survives. */
+const EMPTY_PORTAL_DATA: PortalData = {
+  ...DEFAULT_PORTAL_DATA,
+  asOf: '',
+  program: { ito: emptyProgram(DEFAULT_PORTAL_DATA.program.ito), bpo: emptyProgram(DEFAULT_PORTAL_DATA.program.bpo) },
+  tower: { ...DEFAULT_PORTAL_DATA.tower, accomplishments: [], activities: [], milestones: [], keyActivities: [], issues: [] },
+}
 
 function loadCache(): PortalData {
   try {
@@ -67,9 +77,13 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // The cached copy is whatever the last user's role was allowed to see (Premera users get a
-  // filtered document), so it must not outlive their session.
+  // filtered document), so it must not outlive their session — neither in storage nor in
+  // memory, or the next user sees it until (or if) their own fetch succeeds.
   useEffect(() => {
-    if (!authLoading && !token) localStorage.removeItem(STORAGE_KEY)
+    if (authLoading || token) return
+    localStorage.removeItem(STORAGE_KEY)
+    setData(EMPTY_PORTAL_DATA)
+    setEtag(null)
   }, [authLoading, token])
 
   // Fetch from API once auth is resolved; re-fetch if token changes

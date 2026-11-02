@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { type IssueRow, type ActionStatus } from '../data/portalData'
 import StatusDot from './StatusDot'
+import { STATUS, type StatusKey } from '../data/status'
 import VisibleToPremera from './VisibleToPremera'
 
 // Read-only now that Excel is the sole source of truth for portal data — action
@@ -157,10 +158,12 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 text-xs text-slate-400">
-          <span>Due Date: {issue.date || '—'}</span>
+          {/* The issue's own due date and status, not an action's — labelled so the two aren't confused. */}
+          <span>Issue due: {issue.date || '—'}</span>
           <div className="flex items-center gap-1.5">
+            <span>Issue status:</span>
             <StatusDot status={issue.status} />
-            <span>{issue.status === 'atRisk' ? 'At Risk' : issue.status === 'delayed' ? 'Delayed' : issue.status}</span>
+            <span>{STATUS[issue.status as StatusKey]?.label ?? issue.status}</span>
           </div>
         </div>
       </div>

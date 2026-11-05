@@ -587,8 +587,8 @@ export default function ProgramLevel() {
                 <div className="flex items-center justify-between gap-2 pt-2 pb-3">
                   <div className="flex items-center gap-2">
                     <StatusDot status={w.status} />
-                    <span className="text-xs font-semibold" style={{ color: w.status === 'atRisk' || w.status === 'delayed' ? '#d97706' : '#16a34a' }}>
-                      {w.status === 'atRisk' ? 'At Risk' : w.status === 'delayed' ? 'Delayed' : w.status === 'complete' ? 'Complete' : 'On Track'}
+                    <span className="text-xs font-semibold" style={{ color: STATUS[w.status as StatusKey]?.color }}>
+                      {STATUS[w.status as StatusKey]?.label ?? w.status}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

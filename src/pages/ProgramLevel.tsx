@@ -101,7 +101,7 @@ function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
   )
 }
 
-function RisksSection({ issues }: { issues: IssueRow[] }) {
+function RisksSection({ issues, division }: { issues: IssueRow[]; division: 'ito' | 'bpo' }) {
   const atRiskCount = issues.filter(r => isAtRisk(r.status)).length
   // Of the open (at-risk/delayed) items listed below, those flagged for Premera.
   const premeraCount = issues.filter(r => isAtRisk(r.status) && r.premeraActionRequired).length
@@ -110,17 +110,17 @@ function RisksSection({ issues }: { issues: IssueRow[] }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
       <div className="flex flex-col sm:flex-row gap-2">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 border border-amber-200 w-full sm:w-auto">
+        <Link to={`/risks?division=${division}`} title="Open these in Risks & Issues" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 border border-amber-200 w-full sm:w-auto hover:bg-amber-200 transition">
           <AlertTriangle size={13} className="text-amber-500 shrink-0" />
           <span className="text-xs font-semibold text-amber-800">
             Risks &amp; Issues: <span className="text-amber-600">{atRiskCount}</span>
           </span>
-        </div>
+        </Link>
         {overdueCount > 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 w-full sm:w-auto">
+          <Link to={`/risks?division=${division}&overdue=1`} title="Open the overdue items in Risks & Issues" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 w-full sm:w-auto hover:bg-red-700 transition">
             <AlertTriangle size={13} className="text-white shrink-0" />
             <span className="text-xs font-semibold text-white">Overdue: {overdueCount}</span>
-          </div>
+          </Link>
         )}
         {premeraCount > 0 && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-100 border border-red-200 w-full sm:w-auto">
@@ -171,7 +171,7 @@ export default function ProgramLevel() {
   }, [])
 
   const columns = useMemo<ColDef<Workstream>[]>(() => [
-    renderColumn<Workstream>({ headerName: 'Operational Area', flex: 2, minWidth: 200 }, (w) => {
+    renderColumn<Workstream>({ headerName: 'Operational Area', flex: 2, minWidth: 180 }, (w) => {
       const Icon = ICONS[w.icon] ?? Share2
       return (
         <div className="flex items-center gap-2 min-w-0">
@@ -183,7 +183,7 @@ export default function ProgramLevel() {
     }),
     { ...statusColumn<Workstream>('Status', (w) => w.status as StatusKey, 130), tooltipValueGetter: (tp) => tp.data?.statusMessage },
     renderColumn<Workstream>({ headerName: 'Feedback', width: 100 }, (w) => <QuickFeedback itemId={w.id} itemLabel={w.name} />),
-    renderColumn<Workstream>({ headerName: 'Action Required', width: 140 }, (w) => w.premeraActionRequired && (
+    renderColumn<Workstream>({ headerName: 'Action Required', width: 120 }, (w) => w.premeraActionRequired && (
       <button
         title="View risks & issues requiring Premera attention"
         onClick={() => navigate('/risks')}
@@ -192,9 +192,9 @@ export default function ProgramLevel() {
         <Flag size={12} className="text-red-500" /> View
       </button>
     )),
-    { headerName: 'Key Accomplishments', flex: 3, minWidth: 220, valueGetter: (vp) => vp.data?.accomplishments },
-    { headerName: 'Planned Activities', flex: 3, minWidth: 220, valueGetter: (vp) => vp.data?.activities },
-    renderColumn<Workstream>({ headerName: 'Milestones', width: 120 }, (w) => (
+    { headerName: 'Key Accomplishments', flex: 3, minWidth: 170, valueGetter: (vp) => vp.data?.accomplishments },
+    { headerName: 'Planned Activities', flex: 3, minWidth: 170, valueGetter: (vp) => vp.data?.activities },
+    renderColumn<Workstream>({ headerName: 'Milestones', width: 110 }, (w) => (
       <span className="text-xs font-semibold text-primary whitespace-nowrap" title="Click the row to see its milestones">
         {milestoneCount(w)} milestone{milestoneCount(w) === 1 ? '' : 's'} ›
       </span>
@@ -243,7 +243,7 @@ export default function ProgramLevel() {
       {/* Scorecard and risks summarise the selected ITO/BPO division — not applicable to Transition. */}
       {!isTransition && <HealthScorecard workstreams={p.workstreams} />}
 
-      {!isTransition && <RisksSection issues={p.issues} />}
+      {!isTransition && <RisksSection issues={p.issues} division={division} />}
 
       {/* ITO / BPO segmented switcher */}
       <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1" role="tablist" aria-label="Program division">

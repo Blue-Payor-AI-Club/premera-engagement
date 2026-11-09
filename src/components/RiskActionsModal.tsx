@@ -43,7 +43,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
   return (
     <Dialog open={!!issue} onOpenChange={(o) => { if (!o) onClose() }}>
       {issue && (
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <AlertTriangle size={15} className="text-amber-500 shrink-0" />

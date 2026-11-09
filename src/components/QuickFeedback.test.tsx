@@ -42,11 +42,29 @@ describe('QuickFeedback thumbs down', () => {
     expect(puts().at(-1)).toEqual({ vote: 'down', comment: 'Dates slipped' })
   })
 
-  it('Skip still closes without a description', async () => {
+  it('Skip sends the concern without a description', async () => {
     renderIt()
     await userEvent.click(screen.getByTitle('Needs attention'))
     await userEvent.click(screen.getByRole('button', { name: 'Skip' }))
     expect(screen.queryByPlaceholderText('Describe the concern...')).toBeNull()
+    expect(puts().at(-1)).toEqual({ vote: 'down' })
+  })
+
+  it('opening the box sends nothing; a sent concern shows a short badge, not a lasting red thumb', async () => {
+    renderIt()
+    await userEvent.click(screen.getByTitle('Needs attention'))
+    expect(puts()).toHaveLength(0)
+    await userEvent.type(screen.getByPlaceholderText('Describe the concern...'), 'Dates slipped')
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    expect(await screen.findByText('Sent ✓')).toBeInTheDocument()
+    expect(screen.getByTitle('Needs attention').className).not.toMatch(/red-500/)
+  })
+
+  it('a saved thumbs-down from earlier is not shown as a red thumb', async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ vote: 'down', comment: 'old' })))
+    renderIt()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByTitle('Needs attention').className).not.toMatch(/red-500/)
   })
 
   it('stays open, with the typed text, when the textarea or the page scrolls', async () => {

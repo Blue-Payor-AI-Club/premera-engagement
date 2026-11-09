@@ -106,6 +106,10 @@ export default function DataGrid<T>({
   const defaultColDef = useMemo<ColDef<T>>(() => ({
     resizable: true,
     sortable: false,
+    // Narrow columns wrap their header instead of cutting it off — so columns can stay narrow
+    // and the grid fits the page without a sideways scroll.
+    wrapHeaderText: true,
+    autoHeaderHeight: true,
     cellRenderer: TextCell,
     cellClass: 'flex items-center',
     suppressMovable: true,
@@ -159,7 +163,7 @@ export default function DataGrid<T>({
 
       <Dialog open={!!d} onOpenChange={(o) => { if (!o) setOpenId(null) }}>
         {d && (
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>{d.title}</DialogTitle>
               {d.subtitle ? <DialogDescription>{d.subtitle}</DialogDescription> : <DialogDescription className="sr-only">Full details of this row</DialogDescription>}

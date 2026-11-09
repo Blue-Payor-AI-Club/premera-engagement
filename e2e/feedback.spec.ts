@@ -55,7 +55,7 @@ test.describe('Feedback to UST', () => {
 
   test('form fields have accessible labels', async ({ page, request }) => {
     await signInAs(page, request, USERS.premera, '/feedback')
-    await expect(page.getByLabel('Area')).toBeVisible()
-    await expect(page.getByLabel('Subject')).toBeVisible()
+    await expect(page.getByLabel('Area', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Subject', { exact: true })).toBeVisible()
   })
 })

@@ -143,7 +143,7 @@ function EditDialog({ request, onClose }: { request: EditRequest; onClose: () =>
   return (
     // Radix (shadcn Dialog) handles Esc, focus and stacking over another dialog (e.g. the actions window).
     <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose() }}>
-      <DialogContent aria-describedby={undefined}>
+      <DialogContent className="max-w-2xl" aria-describedby={undefined}>
         <form onSubmit={submit}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>

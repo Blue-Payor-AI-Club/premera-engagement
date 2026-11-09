@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import VisibleToPremera from '../components/VisibleToPremera'
 import { AlertTriangle, Flag, Filter, CalendarDays, Download, Search } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
@@ -71,21 +72,15 @@ function IssueGroup({
   division,
   rows,
   onSelect,
-  showAll,
-  premeraOnly,
+  shown,
 }: {
   title: string
   division: Division
   rows: IssueRow[]
   onSelect: (r: IssueRow) => void
-  showAll: boolean
-  premeraOnly: boolean
+  shown: (r: IssueRow) => boolean
 }) {
-  const visible = rows.filter((r) => {
-    const statusOk = showAll || isAtRisk(r.status)
-    const premeraOk = !premeraOnly || r.premeraActionRequired
-    return statusOk && premeraOk
-  })
+  const visible = rows.filter(shown)
 
   const canEdit = !!useEditor()
   const columns = useMemo<ColDef<IssueRow>[]>(() => [
@@ -217,10 +212,16 @@ function IssueGroup({
 export default function Risks() {
   const { data } = usePortalData()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Program Level's summary chips link here as /risks?division=ito[&overdue=1].
+  const [params] = useSearchParams()
   const [showAll, setShowAll] = useState(false)
+  const [overdueOnly, setOverdueOnly] = useState(params.get('overdue') === '1')
   const [query, setQuery] = useState('')
   const [severity, setSeverity] = useState<'' | SeverityLevel>('')
-  const [division, setDivision] = useState<'all' | 'ito' | 'bpo'>('all')
+  const [division, setDivision] = useState<'all' | 'ito' | 'bpo'>(() => {
+    const d = params.get('division')
+    return d === 'ito' || d === 'bpo' ? d : 'all'
+  })
   const [premeraOnly, setPremeraOnly] = useState(false)
   // Stable, so the grids' column definitions don't change on every render.
   const selectIssue = useCallback((r: IssueRow) => setSelectedId(r.id), [])
@@ -243,7 +244,8 @@ export default function Risks() {
     (!q || [r.issue, ...r.mitigations].some((t) => t.toLowerCase().includes(q))) && (!severity || r.severity === severity)
   const ito = division === 'bpo' ? [] : data.program.ito.issues.filter(matches)
   const bpo = division === 'ito' ? [] : data.program.bpo.issues.filter(matches)
-  const shown = (r: IssueRow) => (showAll || isAtRisk(r.status)) && (!premeraOnly || r.premeraActionRequired)
+  const shown = (r: IssueRow) =>
+    (overdueOnly ? isOverdue(r.date, r.status === 'complete') : showAll || isAtRisk(r.status)) && (!premeraOnly || !!r.premeraActionRequired)
 
   // Counted from the same rows the filters list (status + Premera), so the pills match the tables.
   const listed = [...ito, ...bpo].filter(shown)
@@ -282,7 +284,7 @@ export default function Risks() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-6 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 mb-6 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wide sm:mr-1">
           <Filter size={12} />
           Filter
@@ -305,6 +307,15 @@ export default function Risks() {
           className={showAll ? 'w-full sm:w-auto bg-slate-700 hover:bg-slate-700/90' : 'w-full sm:w-auto'}
         >
           {showAll ? 'Showing All Statuses' : 'Show All Statuses'}
+        </Button>
+        <Button
+          size="sm"
+          variant={overdueOnly ? 'destructive' : 'outline'}
+          aria-pressed={overdueOnly}
+          onClick={() => setOverdueOnly(v => !v)}
+          className="w-full sm:w-auto"
+        >
+          Overdue Only
         </Button>
         <label className="relative w-full sm:w-56 sm:ml-2">
           <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
@@ -363,16 +374,14 @@ export default function Risks() {
           division="ito"
           rows={ito}
           onSelect={selectIssue}
-          showAll={showAll}
-          premeraOnly={premeraOnly}
+          shown={shown}
         />
         <IssueGroup
           title="Program Level — BPO"
           division="bpo"
           rows={bpo}
           onSelect={selectIssue}
-          showAll={showAll}
-          premeraOnly={premeraOnly}
+          shown={shown}
         />
         {!ito.some(shown) && !bpo.some(shown) && (
           <p className="text-sm text-slate-500 text-center py-8">No risks or issues match these filters.</p>

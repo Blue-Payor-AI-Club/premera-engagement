@@ -33,12 +33,12 @@ function WorkstreamGrid({ data }: { data: TransitionData }) {
   const canEdit = !!useEditor()
   const rows = useMemo(() => flattenDashboard(data.dashboard), [data.dashboard])
   const columns = useMemo<(ColDef<DashRow> | ColGroupDef<DashRow>)[]>(() => {
-    const text = (headerName: string, get: (r: DashboardRow) => string, headerTooltip?: string, width = 94): ColDef<DashRow> =>
-      ({ headerName, headerTooltip, width, valueGetter: (p) => (p.data ? get(p.data.row) || '' : '') })
+    const text = (headerName: string, get: (r: DashboardRow) => string, headerTooltip?: string, width = 82): ColDef<DashRow> =>
+      ({ headerName, headerTooltip, width, cellClass: 'flex items-center !px-1.5 whitespace-nowrap text-[12px]', valueGetter: (p) => (p.data ? get(p.data.row) || '' : '') })
     return [
       renderColumn<DashRow>({
         headerName: 'Tower',
-        width: 150,
+        width: 130,
         pinned: 'left',
         rowSpan: (p) => (p.data && p.data.i === 0 ? p.data.groupSize : 1),
         cellClass: 'flex items-start bg-white font-bold text-[#10285c] !border-r !border-slate-200',
@@ -48,25 +48,25 @@ function WorkstreamGrid({ data }: { data: TransitionData }) {
           <span className="ml-auto font-normal" data-no-details><AddButton compact request={() => dashboardRowRequest(data, r.g)}>{`Add a row to ${r.tower}`}</AddButton></span>
         </div>
       )),
-      renderColumn<DashRow>({ headerName: 'Workstream', width: 175, pinned: 'left' }, (r) => (
+      renderColumn<DashRow>({ headerName: 'Workstream', width: 160, pinned: 'left' }, (r) => (
         <Clamp title={r.row.workstream}><span className="font-bold text-[#10285c]">{r.row.workstream}</span><VisibleToPremera flagged={r.row.needsPremeraAttention} /></Clamp>
       )),
       {
         headerName: 'Discovery / Planning / Onboarding',
         headerClass: 'bg-[#9dc3e6] text-[#0b2a4a]',
         children: [
-          renderColumn<DashRow>({ headerName: 'Status', width: 70, cellClass: 'flex items-center justify-center' }, (r) => <PhaseStatus status={r.row.planning.status} />),
+          renderColumn<DashRow>({ headerName: 'Status', width: 62, cellClass: 'flex items-center justify-center' }, (r) => <PhaseStatus status={r.row.planning.status} />),
           text('Start', (r) => r.planning.start),
           text('SOW Submit', (r) => r.planning.sowSubmit, 'SOW Planned Submit Date'),
           text('SOW Approval', (r) => r.planning.sowApproval, 'SOW Target Approval Date'),
-          text('Onboarding', (r) => r.planning.onboardingComplete, 'Planned Onboarding Completion', 104),
+          text('Onboarding', (r) => r.planning.onboardingComplete, 'Planned Onboarding Completion', 92),
         ],
       },
       {
         headerName: 'Transition',
         headerClass: 'bg-[#9dc3e6] text-[#0b2a4a]',
         children: [
-          renderColumn<DashRow>({ headerName: 'Status', width: 70, cellClass: 'flex items-center justify-center' }, (r) => (
+          renderColumn<DashRow>({ headerName: 'Status', width: 62, cellClass: 'flex items-center justify-center' }, (r) => (
             <PhaseStatus status={r.row.transition.status} blank={r.row.transition.start === '' && r.row.transition.goLive === ''} />
           )),
           text('Start', (r) => r.transition.start),
@@ -76,7 +76,7 @@ function WorkstreamGrid({ data }: { data: TransitionData }) {
       renderColumn<DashRow>({
         headerName: 'Notes',
         flex: 1,
-        minWidth: 200,
+        minWidth: 160,
         rowSpan: (p) => (p.data && p.data.notesSpan > 1 ? p.data.notesSpan : 1),
         cellClass: 'flex items-start bg-white text-[12px] !border-l !border-slate-200',
       }, (r) => (r.notesSpan > 0 && r.row.notes?.length ? (
@@ -131,10 +131,10 @@ function RaidGrid({ data }: { data: TransitionData }) {
   const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, id: String(index), index })), [data.raid])
   const columns = useMemo<ColDef<RaidRow>[]>(() => [
     renderColumn<RaidRow>({ headerName: 'RAID', width: 80, cellClass: 'flex items-center justify-center font-semibold' }, (r) => r.type),
-    renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 260 }, (r) => (
+    renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 190 }, (r) => (
       <Clamp title={r.description}>{r.description}<VisibleToPremera flagged={r.needsPremeraAttention} /></Clamp>
     )),
-    { headerName: 'Mitigation Plan / Next Steps', flex: 2, minWidth: 260, valueGetter: (p) => p.data?.mitigation },
+    { headerName: 'Mitigation Plan / Next Steps', flex: 2, minWidth: 190, valueGetter: (p) => p.data?.mitigation },
     { headerName: 'Owner', width: 140, valueGetter: (p) => p.data?.owner },
     dateColumn<RaidRow>('Due Date', (r) => r.dueDate, raidDone, 120),
     { headerName: 'Status', width: 120, valueGetter: (p) => p.data?.status },

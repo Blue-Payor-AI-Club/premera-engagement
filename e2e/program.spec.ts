@@ -68,7 +68,7 @@ test.describe('quick feedback (thumbs)', () => {
     await expect(up).not.toHaveClass(/emerald-600/)
   })
 
-  test('thumbs down: empty Submit is refused, Skip keeps the vote, a typed concern is saved', async ({ page, request }) => {
+  test('thumbs down: empty Submit is refused, Skip sends it and a short badge confirms', async ({ page, request }) => {
     const who = { email: `e2e.down${Date.now()}@premera.com`, role: 'premera_stakeholder' as const }
     // Premera users need something visible to vote on: the demo flags one workstream per division.
     await signInAs(page, request, who)
@@ -83,7 +83,8 @@ test.describe('quick feedback (thumbs)', () => {
     await expect(page.getByRole('alert')).toHaveText('Please describe your concern, or choose Skip.')
     await page.getByRole('button', { name: 'Skip' }).click()
     await expect(page.getByPlaceholder('Describe the concern...')).toHaveCount(0)
-    await expect(down).toHaveClass(/red-500/)
+    await expect(page.getByText('Sent ✓', { exact: true }).filter({ visible: true })).toBeVisible()
+    await expect(down).not.toHaveClass(/red-500/)
 
   })
 
@@ -101,14 +102,15 @@ test.describe('quick feedback (thumbs)', () => {
     expect(list.some((v: { comment?: string }) => v.comment === 'Dates slipped twice ✓ — ünïcode check')).toBeTruthy()
   })
 
-  test('Esc closes the concern popup without losing the vote', async ({ page, request }) => {
+  test('Esc cancels the concern popup and sends nothing', async ({ page, request }) => {
     await signInAs(page, request, { email: `e2e.esc${Date.now()}@ust.com`, role: 'ust_stakeholder' })
     await gridReady(page)
     await page.getByTitle('Needs attention').filter({ visible: true }).first().click()
     await expect(page.getByPlaceholder('Describe the concern...')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByPlaceholder('Describe the concern...')).toHaveCount(0)
-    await expect(page.getByTitle('Needs attention').filter({ visible: true }).first()).toHaveClass(/red-500/)
+    await expect(page.getByTitle('Needs attention').filter({ visible: true }).first()).not.toHaveClass(/red-500/)
+    await expect(page.getByText('Sent ✓', { exact: true })).toHaveCount(0)
   })
 })
 

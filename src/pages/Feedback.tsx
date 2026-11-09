@@ -3,7 +3,7 @@ import { Button } from '../components/ui/button'
 import { Input, Select, Textarea } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog'
-import { Star, Send, MessageSquareText, CheckCircle2 } from 'lucide-react'
+import { Star, Send, MessageSquareText, CheckCircle2, Search } from 'lucide-react'
 import { apiFetch } from '../lib/api'
 
 const FALLBACK_AREAS = [
@@ -68,15 +68,35 @@ export default function Feedback() {
   const [areas, setAreas]       = useState<string[]>(FALLBACK_AREAS)
   const [toast, setToast]       = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Log filters (client-side over the whole log).
+  const [fq, setFq] = useState('')
+  const [fArea, setFArea] = useState('')
+  const [fPriority, setFPriority] = useState('')
+  const [fRating, setFRating] = useState(0)
+  const q = fq.trim().toLowerCase()
+  const filtered = log.filter((e) =>
+    (!q || [e.subject, e.details ?? ''].some((t) => t.toLowerCase().includes(q))) &&
+    (!fArea || e.area === fArea) &&
+    (!fPriority || e.priority === fPriority) &&
+    (!fRating || e.rating === fRating))
+  const filtering = !!(q || fArea || fPriority || fRating)
 
   // Load entries, summary, and valid areas on mount
   useEffect(() => {
-    apiFetch('/feedback')
-      .then(async res => {
-        const data = await res.json() as { entries: Entry[] }
-        setLog(data.entries ?? [])
-      })
-      .catch(() => { /* API unavailable — log stays empty */ })
+    // The list is paged; read every page so the count and the filters cover the whole log.
+    ;(async () => {
+      const all: Entry[] = []
+      let cursor: string | undefined
+      // ponytail: 50 pages × 100 = 5,000 entries cap; add server-side filtering if the log ever grows past that.
+      for (let i = 0; i < 50; i++) {
+        const res = await apiFetch(`/feedback?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+        const data = await res.json() as { entries: Entry[]; nextCursor?: string }
+        all.push(...(data.entries ?? []))
+        if (!data.nextCursor) break
+        cursor = data.nextCursor
+      }
+      setLog(all)
+    })().catch(() => { /* API unavailable — log stays empty */ })
 
     apiFetch('/feedback/summary')
       .then(async res => {
@@ -201,8 +221,34 @@ export default function Feedback() {
         <aside className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-slate-800">Feedback Log</h3>
-            <div className="text-sm text-slate-400">{log.length} submissions</div>
+            <div className="text-sm text-slate-400">{filtering ? `${filtered.length} of ${log.length}` : log.length} submissions</div>
           </div>
+
+          {log.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <label className="relative col-span-2">
+                <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+                <Input type="search" value={fq} onChange={(e) => setFq(e.target.value)} placeholder="Search feedback" aria-label="Search feedback" className="h-8 pl-7 text-xs" />
+              </label>
+              <Select value={fArea} onChange={(e) => setFArea(e.target.value)} aria-label="Filter by area" className="h-8 text-xs">
+                <option value="">All areas</option>
+                {[...new Set(log.map((e) => e.area))].sort().map((a) => <option key={a} value={a}>{a}</option>)}
+              </Select>
+              <Select value={fPriority} onChange={(e) => setFPriority(e.target.value)} aria-label="Filter by priority" className="h-8 text-xs">
+                <option value="">All priorities</option>
+                {Object.keys(PRIORITY_COLORS).map((k) => <option key={k} value={k}>{k}</option>)}
+              </Select>
+              <Select value={fRating} onChange={(e) => setFRating(Number(e.target.value))} aria-label="Filter by rating" className="h-8 text-xs">
+                <option value={0}>Any rating</option>
+                {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} star{n > 1 ? 's' : ''}</option>)}
+              </Select>
+              {filtering && (
+                <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setFq(''); setFArea(''); setFPriority(''); setFRating(0) }}>
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          )}
 
           {avg && (
             <div className="rounded-lg p-4 mb-4 flex items-center gap-3" style={{ background: 'rgba(0,103,177,.06)' }}>
@@ -218,7 +264,10 @@ export default function Feedback() {
             {log.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-8">No feedback submitted yet.</p>
             )}
-            {log.map((e) => (
+            {log.length > 0 && filtered.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-8">No feedback matches these filters.</p>
+            )}
+            {filtered.map((e) => (
               <div key={e.id} className="p-3 rounded-lg border border-slate-100 bg-slate-50">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-800">{e.subject}</div>

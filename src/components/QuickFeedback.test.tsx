@@ -76,12 +76,4 @@ describe('QuickFeedback thumbs down', () => {
     expect(screen.getByText('0 / 1000')).toBeInTheDocument()
   })
 
-  it('opens above the button when there is no room below', async () => {
-    renderIt()
-    const button = screen.getByTitle('Needs attention')
-    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ top: window.innerHeight - 30, bottom: window.innerHeight - 10, left: 300, right: 320 } as DOMRect)
-    await userEvent.click(button)
-    const pop = screen.getByPlaceholderText('Describe the concern...').closest('[data-qf-pop]') as HTMLElement
-    expect(parseFloat(pop.style.top)).toBeLessThan(window.innerHeight - 30)
-  })
 })

@@ -72,3 +72,10 @@ body {
   justify-content: center;
 }
 
+
+/* AG Grid sets every cell's line-height to the row height (to centre one line of text). The
+   portal's grids centre cell content with flexbox instead, so inline badges and two-line text
+   would otherwise inherit a 50px line-height. */
+.ag-cell {
+  line-height: 1.4 !important;
+}

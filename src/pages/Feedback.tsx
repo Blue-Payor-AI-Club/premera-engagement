@@ -1,5 +1,9 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { Star, Send, MessageSquareText, CheckCircle2, X } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { Input, Select, Textarea } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog'
+import { Star, Send, MessageSquareText, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '../lib/api'
 
 const FALLBACK_AREAS = [
@@ -130,72 +134,67 @@ export default function Feedback() {
           </h2>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1.5">Overall experience</label>
+            <Label className="block text-sm font-medium mb-1.5">Overall experience</Label>
             <Stars value={rating} onChange={setRating} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1.5">Area</label>
-            <select
+            <Label htmlFor="feedback-area" className="block text-sm font-medium mb-1.5">Area</Label>
+            <Select
+              id="feedback-area"
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0067b1]/40"
               required
             >
               <option value="" disabled>Select an area…</option>
               {areas.map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1.5">Priority</label>
-            <select
+            <Label htmlFor="feedback-priority" className="block text-sm font-medium mb-1.5">Priority</Label>
+            <Select
+              id="feedback-priority"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0067b1]/40"
             >
               <option>Low</option>
               <option>Medium</option>
               <option>High</option>
               <option>Critical</option>
-            </select>
+            </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1.5">Subject</label>
-            <input
+            <Label htmlFor="feedback-subject" className="block text-sm font-medium mb-1.5">Subject</Label>
+            <Input
+              id="feedback-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0067b1]/40"
               placeholder="Brief summary of your feedback"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="feedback-details" className="block text-sm font-medium text-slate-600 mb-1.5">
+            <Label htmlFor="feedback-details" className="block text-sm font-medium mb-1.5">
               Details{area === 'Other' && <span className="text-red-600"> (required for Other — what is it about?)</span>}
-            </label>
-            <textarea
+            </Label>
+            <Textarea
               id="feedback-details"
               value={details}
               onChange={(e) => setDetails(e.target.value)}
               required={area === 'Other'}
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm h-32 focus:outline-none focus:ring-2 focus:ring-[#0067b1]/40"
+              className="h-32"
               placeholder="Share what's working well or what UST should improve..."
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting || !rating}
-            className="w-full inline-flex items-center justify-center gap-2 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm disabled:opacity-50"
-            style={{ background: 'linear-gradient(150deg,#00a0df,#0067b1)' }}
-          >
+          <Button type="submit" size="lg" disabled={submitting || !rating} className="w-full">
             <Send size={16} /> {submitting ? 'Sending…' : 'Send to UST'}
-          </button>
+          </Button>
         </form>
 
         {/* Log */}
@@ -243,33 +242,20 @@ export default function Feedback() {
         </aside>
       </div>
 
-      {toast && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(15,23,42,0.55)' }}>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center text-center">
+      <Dialog open={toast} onOpenChange={setToast}>
+        <DialogContent className="max-w-sm">
+          <div className="p-8 flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mb-5" style={{ background: 'rgba(26,162,96,0.1)' }}>
               <CheckCircle2 size={36} className="text-emerald-600" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Feedback Received!</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <DialogTitle className="text-xl font-bold text-slate-900 mb-2">Feedback Received!</DialogTitle>
+            <DialogDescription className="text-sm text-slate-600 leading-relaxed">
               Your feedback has been captured and the Premera-UST engagement team will review it and take the necessary action.
-            </p>
-            <button
-              onClick={() => setToast(false)}
-              className="mt-6 px-6 py-2.5 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
-              style={{ background: 'linear-gradient(150deg,#00a0df,#0067b1)' }}
-            >
-              Close
-            </button>
-            <button
-              onClick={() => setToast(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
+            </DialogDescription>
+            <Button className="mt-6" onClick={() => setToast(false)}>Close</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

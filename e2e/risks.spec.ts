@@ -59,7 +59,7 @@ test.describe('Risks & Issues', () => {
 
   test('an issue with no actions says so', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust, '/risks')
-    const row = page.locator('tr', { hasText: /Background checks for 2|Enrollment & Billing reconciliation/ }).first()
+    const row = page.locator('.ag-row', { hasText: /Background checks for 2|Enrollment & Billing reconciliation/ }).first()
     await page.getByRole('button', { name: 'Show All Statuses' }).click()
     await row.getByRole('button', { name: 'Actions' }).click()
     await expect(page.getByText('No actions recorded yet.')).toBeVisible()

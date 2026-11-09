@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Input, Select } from '../ui/input'
 import { Badge, ErrorBanner, btnDanger, btnPrimary } from '../ui'
 import { adminApi, type AccessRequest } from '../../lib/adminApi'
 import { ROLES, ROLE_LABELS, type Role } from '../../lib/authApi'
@@ -40,18 +41,18 @@ function PendingCard({ request, onDone }: { request: AccessRequest; onDone: () =
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-slate-500">
           Grant access as
-          <select
+          <Select
             aria-label={`Role for ${request.email}`}
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
-            className="mt-1 block rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            className="mt-1 block"
           >
             {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="text-xs font-medium text-slate-500 flex-1 min-w-[10rem]">
           Note (optional, included in the email)
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800" />
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-1 block w-full" />
         </label>
         <button type="button" disabled={busy} onClick={() => void decide(() => adminApi.approveRequest(request.id, role, note.trim() || undefined))} className={btnPrimary}>
           Approve

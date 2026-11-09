@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import VisibleToPremera from '../components/VisibleToPremera'
 import { AlertTriangle, Flag, Filter, CalendarDays, Download, Search } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
@@ -9,7 +9,13 @@ import { usePortalData } from '../context/PortalDataContext'
 import { type IssueRow, type SeverityLevel } from '../data/portalData'
 import { STATUS, type StatusKey } from '../data/status'
 import { csvDate, downloadCsv, yesNo } from '../lib/csv'
-import { AddButton, EditButton, EditCell, EditHeader } from '../components/Editor'
+import { AddButton, EditButton, useEditor } from '../components/Editor'
+import type { ColDef } from 'ag-grid-community'
+import DataGrid, { Clamp, FullList } from '../components/DataGrid'
+import { dateColumn, editColumn, renderColumn, statusColumn } from '../components/gridColumns'
+import StatusLabel from '../components/StatusLabel'
+import { Button } from '../components/ui/button'
+import { Input, Select } from '../components/ui/input'
 import { issueRequest, type Division } from '../lib/editRequests'
 import OverdueTag from '../components/OverdueTag'
 import { isOverdue } from '../lib/format'
@@ -81,6 +87,32 @@ function IssueGroup({
     return statusOk && premeraOk
   })
 
+  const canEdit = !!useEditor()
+  const columns = useMemo<ColDef<IssueRow>[]>(() => [
+    renderColumn<IssueRow>({ headerName: 'Risks & Issues', flex: 2, minWidth: 240 }, (r) => (
+      <Clamp title={r.issue}>
+        {r.premeraActionRequired && (
+          <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">Premera</span>
+        )}
+        {r.issue}<VisibleToPremera flagged={r.needsPremeraAttention} />
+      </Clamp>
+    )),
+    { headerName: 'Mitigation Plan', flex: 2, minWidth: 220, valueGetter: (p) => p.data?.mitigations, cellClass: 'flex items-center text-[#0f7aa6]' },
+    dateColumn<IssueRow>('Due Date', (r) => r.date, (r) => r.status === 'complete', 120),
+    renderColumn<IssueRow>({ headerName: 'Severity', width: 100 }, (r) => <div><SeverityBadge value={r.severity} /></div>),
+    renderColumn<IssueRow>({ headerName: 'Priority', width: 100 }, (r) => <div><SeverityBadge value={r.priority} /></div>),
+    statusColumn<IssueRow>('Status', (r) => r.status as StatusKey, 120),
+    renderColumn<IssueRow>({ headerName: 'Actions', width: 110 }, (r) => (
+      <button
+        onClick={() => onSelect(r)}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 transition"
+      >
+        <AlertTriangle size={12} /> Actions
+      </button>
+    )),
+    ...editColumn<IssueRow>(canEdit, (r) => issueRequest(division, r), () => 'Edit risk / issue'),
+  ], [canEdit, division, onSelect])
+
   if (visible.length === 0) return null
 
   return (
@@ -90,64 +122,35 @@ function IssueGroup({
       </div>
 
       {/* desktop */}
-      <table className="hidden sm:table w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-slate-200 text-xs text-slate-500">
-            <th className="text-left font-semibold px-4 py-2">Risks &amp; Issues</th>
-            <th className="text-left font-semibold px-4 py-2">Mitigation Plan</th>
-            <th className="text-left font-semibold px-4 py-2 w-24">Due Date</th>
-            <th className="text-center font-semibold px-4 py-2 w-20">Severity</th>
-            <th className="text-center font-semibold px-4 py-2 w-20">Priority</th>
-            <th className="text-center font-semibold px-4 py-2 w-16">Status</th>
-            <th className="text-center font-semibold px-4 py-2 w-24">Actions</th>
-            <EditHeader />
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((row, i) => (
-            <tr key={row.id} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
-              <td className="px-4 py-3 align-top text-slate-700">
-                {row.premeraActionRequired && (
-                  <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">
-                    Premera
-                  </span>
-                )}
-                {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
-              </td>
-              <td className="px-4 py-3 align-top">
-                <ul className="space-y-1">
-                  {row.mitigations.map((m, j) => (
-                    <li key={j} className="flex gap-2 text-[#0f7aa6]">
-                      <span>•</span>
-                      <span>{m}</span>
-                    </li>
-                  ))}
-                </ul>
-              </td>
-              <td className="px-4 py-3 align-top text-[#0f7aa6] font-medium">{row.date || '—'}<OverdueTag date={row.date} done={row.status === 'complete'} /></td>
-              <td className="px-4 py-3 align-top text-center">
-                <SeverityBadge value={row.severity} />
-              </td>
-              <td className="px-4 py-3 align-top text-center">
-                <SeverityBadge value={row.priority} />
-              </td>
-              <td className="px-4 py-3 align-top text-center">
-                <StatusDot status={row.status} />
-              </td>
-              <td className="px-4 py-3 align-top text-center">
-                <button
-                  onClick={() => onSelect(row)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 transition"
-                >
-                  <AlertTriangle size={12} />
-                  Actions
-                </button>
-              </td>
-              <EditCell className="align-top py-3" title="Edit risk / issue" request={() => issueRequest(division, row)} />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="hidden sm:block">
+        <DataGrid<IssueRow>
+          label={title}
+          rows={visible}
+          columns={columns}
+          rowId={(r) => r.id}
+          rowHeight={64}
+          details={(r) => ({
+            title: r.issue,
+            subtitle: title,
+            fields: [
+              { label: 'Mitigation plan', value: <FullList items={r.mitigations} /> },
+              { label: 'Due date', value: <>{r.date || '—'}<OverdueTag date={r.date} done={r.status === 'complete'} /></> },
+              { label: 'Status', value: <StatusLabel status={r.status as StatusKey} /> },
+              { label: 'Severity', value: <SeverityBadge value={r.severity} /> },
+              { label: 'Priority', value: <SeverityBadge value={r.priority} /> },
+              { label: 'Premera action required', value: r.premeraActionRequired ? 'Yes' : 'No' },
+              ...(canEdit ? [{ label: 'Premera can see it', value: r.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
+              { label: 'Actions', value: `${(r.riskActions ?? []).length} recorded` },
+            ],
+            actions: (
+              <>
+                <EditButton title="Edit risk / issue" className="" request={() => issueRequest(division, r)} />
+                <Button size="sm" variant="outline" onClick={() => onSelect(r)}><AlertTriangle size={13} /> Open actions</Button>
+              </>
+            ),
+          })}
+        />
+      </div>
 
       {/* mobile */}
       <div className="sm:hidden divide-y divide-slate-100">
@@ -219,6 +222,8 @@ export default function Risks() {
   const [severity, setSeverity] = useState<'' | SeverityLevel>('')
   const [division, setDivision] = useState<'all' | 'ito' | 'bpo'>('all')
   const [premeraOnly, setPremeraOnly] = useState(false)
+  // Stable, so the grids' column definitions don't change on every render.
+  const selectIssue = useCallback((r: IssueRow) => setSelectedId(r.id), [])
 
   const allIssues = useMemo(() => [
     ...data.program.ito.issues,
@@ -282,70 +287,70 @@ export default function Risks() {
           <Filter size={12} />
           Filter
         </div>
-        <button
+        <Button
+          size="sm"
+          variant={premeraOnly ? 'destructive' : 'destructive-outline'}
+          aria-pressed={premeraOnly}
           onClick={() => setPremeraOnly(v => !v)}
-          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold border transition w-full sm:w-auto ${
-            premeraOnly
-              ? 'bg-red-600 text-white border-red-600 shadow-sm'
-              : 'bg-white text-red-700 border-red-300 hover:border-red-400'
-          }`}
+          className="w-full sm:w-auto"
         >
-          <Flag size={11} />
+          <Flag size={12} />
           Premera Action Items Only
-        </button>
-        <button
+        </Button>
+        <Button
+          size="sm"
+          variant={showAll ? 'default' : 'outline'}
+          aria-pressed={showAll}
           onClick={() => setShowAll(v => !v)}
-          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold border transition w-full sm:w-auto ${
-            showAll
-              ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
-              : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
-          }`}
+          className={showAll ? 'w-full sm:w-auto bg-slate-700 hover:bg-slate-700/90' : 'w-full sm:w-auto'}
         >
           {showAll ? 'Showing All Statuses' : 'Show All Statuses'}
-        </button>
+        </Button>
         <label className="relative w-full sm:w-56 sm:ml-2">
           <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
+          <Input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search risks & issues"
             aria-label="Search risks and issues"
-            className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#0067b1]"
+            className="h-8 pl-7 text-xs"
           />
         </label>
-        <select
+        <Select
           value={division}
           onChange={(e) => setDivision(e.target.value as typeof division)}
           aria-label="Division"
-          className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+          className="h-8 w-auto text-xs"
         >
           <option value="all">ITO + BPO</option>
           <option value="ito">ITO only</option>
           <option value="bpo">BPO only</option>
-        </select>
-        <select
+        </Select>
+        <Select
           value={severity}
           onChange={(e) => setSeverity(e.target.value as typeof severity)}
           aria-label="Severity"
-          className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+          className="h-8 w-auto text-xs"
         >
           <option value="">Any severity</option>
           {(Object.keys(SEVERITY_STYLE) as SeverityLevel[]).map((k) => (
             <option key={k} value={k}>{SEVERITY_STYLE[k].label}</option>
           ))}
-        </select>
+        </Select>
         <AddButton request={() => issueRequest(division === 'bpo' ? 'bpo' : 'ito')}>Add risk / issue</AddButton>
-        <button
+        <Button
+          size="sm"
+          variant="outline"
           onClick={() => exportIssues([
             ...ito.filter(shown).map((issue) => ({ division: 'ITO', issue })),
             ...bpo.filter(shown).map((issue) => ({ division: 'BPO', issue })),
           ])}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold border border-slate-300 bg-white text-slate-600 hover:border-slate-500 transition w-full sm:w-auto sm:ml-auto"
+          className="w-full sm:w-auto sm:ml-auto"
         >
-          <Download size={11} />
+          <Download size={12} />
           Export CSV
-        </button>
+        </Button>
       </div>
 
       <div className="mb-4">
@@ -357,7 +362,7 @@ export default function Risks() {
           title="Program Level — ITO"
           division="ito"
           rows={ito}
-          onSelect={(r) => setSelectedId(r.id)}
+          onSelect={selectIssue}
           showAll={showAll}
           premeraOnly={premeraOnly}
         />
@@ -365,7 +370,7 @@ export default function Risks() {
           title="Program Level — BPO"
           division="bpo"
           rows={bpo}
-          onSelect={(r) => setSelectedId(r.id)}
+          onSelect={selectIssue}
           showAll={showAll}
           premeraOnly={premeraOnly}
         />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Textarea } from '../ui/input'
 import { ErrorBanner, Notice, Spinner, btnPrimary } from '../ui'
 import { useResource } from '../../hooks/useResource'
 import { adminApi } from '../../lib/adminApi'
@@ -35,14 +36,13 @@ function DomainsForm({ domains, onSaved }: { domains: string[]; onSaved: () => v
     <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 max-w-xl">
       <label className="block text-xs font-medium text-slate-500">
         Allowed email domains (one per line)
-        <textarea
+        <Textarea
           aria-label="Allowed email domains"
           rows={4}
           value={text}
           onChange={(e) => { setText(e.target.value); setSaved(false) }}
           placeholder="ust.com"
-          className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono resize-y"
-        />
+          className="mt-1 block w-full font-mono resize-y" />
       </label>
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <div className="flex items-center gap-3">

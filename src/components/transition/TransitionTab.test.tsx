@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TransitionTab from './TransitionTab'
 import { TRANSITION_DATA } from '../../data/transitionData'
+import { flattenDashboard } from './dashboardRows'
 
 const allRows = () => TRANSITION_DATA.dashboard.flatMap((g) => g.rows)
 
@@ -38,7 +39,7 @@ describe('Transition tab — Executive Summary', () => {
     expect(screen.getByRole('heading', { name: 'Key Risk', hidden: true })).not.toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Key Risk' })).toBeNull()
     // The dashboard below is unaffected.
-    expect(screen.getByRole('table', { name: /workstream dashboard/i })).toBeVisible()
+    expect(screen.getByRole('region', { name: /workstream dashboard/i })).toBeVisible()
 
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -54,96 +55,73 @@ describe('Transition tab — Dashboard', () => {
     expect(summary.compareDocumentPosition(dashboard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('has the two-level header from the slide with its group labels', () => {
+  // The dashboard is an AG Grid (rendered asynchronously, so these wait with findBy).
+  const grid = () => screen.getByRole('region', { name: /workstream dashboard/i })
+  /** Every cell of the grid row containing `text` (pinned columns render in a separate container). */
+  const rowCells = async (text: string) => {
+    const cell = (await within(grid()).findAllByText(text)).find((el) => el.closest('[row-index]'))!
+    const index = cell.closest('[row-index]')!.getAttribute('row-index')
+    return Array.from(grid().querySelectorAll(`[row-index="${index}"]`)) as HTMLElement[]
+  }
+  const textOf = (els: HTMLElement[]) => els.map((e) => e.textContent).join(' | ')
+
+  it('has the two-level header from the slide with its group labels', async () => {
     render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    for (const label of ['Tower', 'Workstream', 'Discovery/Planning/Onboarding', 'Transition', 'SOW Planned Submit Date', 'SOW Target Approval Date', 'Planned Onboarding Completion', 'Go-Live', 'Notes']) {
-      expect(within(table).getByRole('columnheader', { name: label })).toBeInTheDocument()
+    for (const label of ['Tower', 'Workstream', 'Discovery / Planning / Onboarding', 'Transition', 'SOW Submit', 'SOW Approval', 'Onboarding', 'Go-Live', 'Notes']) {
+      expect(await within(grid()).findByText(label, { selector: '.ag-header-cell-text, .ag-header-group-text' })).toBeInTheDocument()
     }
-    expect(within(table).getAllByRole('columnheader', { name: 'Status' })).toHaveLength(2)
+    expect(within(grid()).getAllByText('Status', { selector: '.ag-header-cell-text' })).toHaveLength(2)
   })
 
-  it('lists every workstream from the slide, grouped under its tower', () => {
+  it('lists every workstream from the slide', async () => {
     render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
     expect(allRows()).toHaveLength(16)
-    // (Claims Operations is both a tower and a workstream, so tell them apart by scope.)
-    const rowHeaders = within(table).getAllByRole('rowheader')
-    const workstreams = rowHeaders.filter((h) => h.getAttribute('scope') === 'row').map((h) => h.textContent)
-    expect(workstreams).toEqual(allRows().map((r) => r.workstream))
-
-    const towers = rowHeaders.filter((h) => h.getAttribute('scope') === 'rowgroup').map((h) => h.textContent)
-    expect(towers).toEqual(['Contracting', 'Customer Service & Platform Engineering', 'Claims Operations', 'Enterprise Technology Solutions', 'Customer Implementation & Core Operations', 'Cross Functional'])
+    for (const r of allRows()) expect((await within(grid()).findAllByText(r.workstream)).length).toBeGreaterThan(0)
   })
 
-  it('merges each tower cell over its rows', () => {
+  it('merges each tower cell over its rows, and a Notes cell over the rows it describes', () => {
+    const rows = flattenDashboard(TRANSITION_DATA.dashboard)
+    const towerSpan = Object.fromEntries(rows.filter((r) => r.i === 0).map((r) => [r.tower, r.groupSize]))
+    expect(towerSpan['Contracting']).toBe(3)
+    expect(towerSpan['Customer Service & Platform Engineering']).toBe(4)
+    expect(towerSpan['Enterprise Technology Solutions']).toBe(4)
+    expect(towerSpan['Claims Operations']).toBe(1)
+    const span = (w: string) => rows.find((r) => r.row.workstream === w)!.notesSpan
+    expect(span('Service Desk and ITOC')).toBe(3)
+    expect(span('Microsoft 365 Support')).toBe(0) // under the merged cell
+    expect(span('Batch Monitoring')).toBe(0)
+    expect(span('Provider Contact Center')).toBe(1) // its own notes cell
+  })
+
+  it('renders the call-to-action note in red, and the other notes normally', async () => {
     render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    const spans = Object.fromEntries(
-      within(table).getAllByRole('rowheader').filter((h) => h.getAttribute('scope') === 'rowgroup').map((h) => [h.textContent, h.getAttribute('rowspan')]),
-    )
-    expect(spans['Contracting']).toBe('3')
-    expect(spans['Customer Service & Platform Engineering']).toBe('4')
-    expect(spans['Enterprise Technology Solutions']).toBe('4')
-    expect(spans['Claims Operations']).toBe('1')
+    expect(await within(grid()).findByText(/Process an on-boarding SOW for the team/)).toHaveClass('text-red-600')
+    expect(within(grid()).getByText(/MSA In Progress: UST Redlines in-work/)).not.toHaveClass('text-red-600')
   })
 
-  it('merges a Notes cell over the rows it describes, emitting no stray cells under it', () => {
+  it('shows status as dots with an accessible label, and N/A where a phase does not apply', async () => {
     render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    const note = within(table).getByText(/past the incumbent’s contract end date/).closest('td')!
-    expect(note).toHaveAttribute('rowspan', '3')
-
-    // Every row has the same number of cells once merges are accounted for: a row under a merged Notes cell has one fewer.
-    const rowOf = (name: string) =>
-      within(table).getAllByRole('rowheader', { name }).find((h) => h.getAttribute('scope') === 'row')!.closest('tr')!
-    const cells = (tr: HTMLElement) => tr.querySelectorAll('th,td').length
-    expect(cells(rowOf('Service Desk and ITOC'))).toBe(cells(rowOf('Microsoft 365 Support')) + 1 + 1) // +tower cell, +notes cell
-    expect(cells(rowOf('Microsoft 365 Support'))).toBe(cells(rowOf('Batch Monitoring')))
-    expect(cells(rowOf('Provider Contact Center'))).toBe(cells(rowOf('Microsoft 365 Support')) + 1) // own notes cell
+    const msa = await rowCells('MSA')
+    expect(msa.some((c) => c.querySelector('[title="At Risk"]'))).toBe(true)
+    expect(textOf(msa)).toMatch('N/A')
+    const ito = await rowCells('Service Desk and ITOC')
+    expect(ito.some((c) => c.querySelector('[title="On Track"]'))).toBe(true)
+    expect(ito.some((c) => c.querySelector('[title="At Risk"]'))).toBe(true)
   })
 
-  it('renders the call-to-action note in red, and the other notes normally', () => {
+  it('leaves the transition cells blank (not "N/A") when the slide has nothing for that row', async () => {
     render(<TransitionTab />)
-    expect(screen.getByText(/Process an on-boarding SOW for the team/)).toHaveClass('text-red-600')
-    expect(screen.getByText('MSA In Progress: UST Redlines in-work')).not.toHaveClass('text-red-600')
+    expect(textOf(await rowCells('Connectivity & Access'))).not.toMatch('N/A')
   })
 
-  it('shows status as dots with an accessible label, and N/A where a phase does not apply', () => {
-    render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    const msa = within(table).getByRole('rowheader', { name: 'MSA' }).closest('tr')!
-    expect(msa.querySelector('[title="At Risk"]')).not.toBeNull()
-    expect(within(msa).getAllByText('N/A').length).toBeGreaterThanOrEqual(3) // onboarding completion + transition status/start/go-live
-    const ito = within(table).getByRole('rowheader', { name: 'Service Desk and ITOC' }).closest('tr')!
-    expect(ito.querySelector('[title="On Track"]')).not.toBeNull()
-    expect(ito.querySelector('[title="At Risk"]')).not.toBeNull()
-  })
-
-  it('leaves the transition cells blank (not "N/A") when the slide has nothing for that row', () => {
-    render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    const row = within(table).getByRole('rowheader', { name: 'Connectivity & Access' }).closest('tr')!
-    expect(within(row).queryByText('N/A')).toBeNull()
-  })
-
-  it('stripes data rows alternately (no per-tower colour fills)', () => {
-    render(<TransitionTab />)
-    const table = screen.getByRole('table', { name: /workstream dashboard/i })
-    const rows = Array.from(table.querySelectorAll('tbody tr'))
-    expect(rows).toHaveLength(16)
-    rows.forEach((tr, i) => expect(tr.getAttribute('data-stripe')).toBe(i % 2 === 0 ? 'even' : 'odd'))
-  })
-
-  it('shows the AS OF date and the RAID log', () => {
+  it('shows the AS OF date and the RAID log', async () => {
     render(<TransitionTab />)
     expect(screen.getAllByText('10/08/26').length).toBeGreaterThan(0)
-    const raid = screen.getByRole('table', { name: /raid log/i })
-    for (const h of ['RAID', 'Description', 'Mitigation Plan/Next Steps', 'Owner', 'Due Date', 'Status']) {
-      expect(within(raid).getByRole('columnheader', { name: h })).toBeInTheDocument()
+    const raid = screen.getByRole('region', { name: /raid log/i })
+    for (const h of ['RAID', 'Description', 'Mitigation Plan / Next Steps', 'Owner', 'Due Date', 'Status']) {
+      expect(await within(raid).findByText(h, { selector: '.ag-header-cell-text' })).toBeInTheDocument()
     }
-    expect(within(raid).getAllByRole('row')).toHaveLength(4) // header + 3 items
-    expect(within(raid).getByText('Jobin Kuriakose')).toBeInTheDocument()
-    expect(within(raid).getByText('Finalize the SLA approach with Premera')).toBeInTheDocument()
+    expect(await within(raid).findByText('Jobin Kuriakose')).toBeInTheDocument()
+    expect(within(raid).getByText(/Finalize the SLA approach with Premera/)).toBeInTheDocument()
   })
 })

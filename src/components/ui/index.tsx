@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 
-export const btnPrimary =
-  'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition hover:opacity-90 bg-[#0067b1]'
-export const btnSecondary =
-  'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
-export const btnDanger =
-  'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed'
-export const inputCls =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00a0df] focus:border-[#00a0df]'
+import { buttonVariants, fieldClass } from './variants'
+
+// Class-string forms of the shadcn/ui Button and field styles, for places that style a plain element.
+// Prefer the components themselves (./button, ./input) in new code.
+export const btnPrimary = buttonVariants()
+export const btnSecondary = buttonVariants({ variant: 'outline', size: 'sm' })
+export const btnDanger = buttonVariants({ variant: 'destructive-outline', size: 'sm' })
+export const inputCls = `${fieldClass} py-2`
 
 export function ErrorBanner({ children }: { children: ReactNode }) {
   return (

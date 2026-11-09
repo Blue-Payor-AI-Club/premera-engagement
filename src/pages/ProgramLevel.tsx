@@ -1,74 +1,33 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AgGridReact } from 'ag-grid-react'
-import type {
-  ColDef,
-  GetRowIdParams,
-  ICellRendererParams,
-  IsFullWidthRowParams,
-} from 'ag-grid-community'
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community'
+import type { ColDef } from 'ag-grid-community'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
-import {
-  Share2,
-  ChevronDown,
-  ChevronRight,
-  AlertTriangle,
-  Flag,
-  Download,
-  Search,
-} from 'lucide-react'
+import { Share2, ChevronDown, ChevronRight, AlertTriangle, Flag, Download, Search } from 'lucide-react'
 import MilestoneTable from '../components/MilestoneTable'
 import SlideHeader from '../components/SlideHeader'
 import Legend from '../components/Legend'
 import TransitionTab from '../components/transition/TransitionTab'
 import { TRANSITION_DATA } from '../data/transitionData'
 import StatusDot from '../components/StatusDot'
+import StatusLabel from '../components/StatusLabel'
 import QuickFeedback from '../components/QuickFeedback'
 import VisibleToPremera from '../components/VisibleToPremera'
-import { PortalDataContext, usePortalData, useUstView } from '../context/PortalDataContext'
+import DataGrid, { Clamp, FullList } from '../components/DataGrid'
+import { editColumn, renderColumn, statusColumn } from '../components/gridColumns'
+import { usePortalData, useUstView } from '../context/PortalDataContext'
 import { isOverdue } from '../lib/format'
-import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
+import type { WorkstreamIcon, Workstream, IssueRow } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
 import { downloadCsv, yesNo } from '../lib/csv'
 import { AddButton, EditButton, useEditor } from '../components/Editor'
+import { Button } from '../components/ui/button'
+import { Input, Select } from '../components/ui/input'
 import {
-  programHeaderRequest, programMilestones, transitionHeaderRequest, workstreamMilestones, workstreamRequest, type Division,
+  programHeaderRequest, programMilestones, transitionHeaderRequest, workstreamMilestones, workstreamRequest,
 } from '../lib/editRequests'
-
-ModuleRegistry.registerModules([AllCommunityModule])
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type WorkstreamRow = Workstream
-
-interface DetailRow {
-  _rowType: 'detail'
-  _parentId: string
-  milestones: MilestoneSection[]
-  name: string
-  icon: WorkstreamIcon
-}
-
-type GridRow = WorkstreamRow | DetailRow
-
-/** Passed to the grid's cell renderers through AG-Grid's context prop. */
-interface GridContext { navigate: (to: string) => void; division: Division }
-
-const isDetailRow = (row: unknown): row is DetailRow =>
-  !!row && typeof row === 'object' && '_rowType' in row && (row as DetailRow)._rowType === 'detail'
-
-// ─── React context — propagates into AG-Grid cell renderers ───────────────────
-
-// Expanded state is read from here, not from row data: AG-Grid only re-renders a cell
-// when its field ('name') changes, so an expanded flag on the row data would go stale.
-const ExpandContext = createContext<{ expandedIds: Set<string>; toggle: (id: string) => void }>({
-  expandedIds: new Set(),
-  toggle: () => {},
-})
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -85,169 +44,7 @@ const TAB_META: Record<ProgramTab, { short: string; full: string }> = {
   transition: { short: 'Transition', full: 'Executive Summary & Dashboard' },
 }
 
-const portalTheme = themeQuartz.withParams({
-  headerBackgroundColor: '#dfe3e6',
-  headerTextColor: '#374151',
-  headerFontSize: 13,
-  headerFontWeight: 600,
-  fontFamily: 'inherit',
-  fontSize: 13,
-  cellTextColor: '#334155',
-  borderColor: '#f1f5f9',
-  rowHoverColor: '#f8fafc',
-  selectedRowBackgroundColor: '#e7f1fa',
-})
-
-// ─── Cell renderers ───────────────────────────────────────────────────────────
-
-/** AG-Grid can keep handing a cell its old copy of a row after a save; the live document is
- * read from context instead, so an edit form never starts from (and saves back) stale values. */
-function useLiveWorkstream(division: Division, id: string | undefined): Workstream | undefined {
-  return useContext(PortalDataContext)?.data.program[division].workstreams.find((w) => w.id === id)
-}
-
-function EditRenderer({ data, context }: ICellRendererParams) {
-  const division = (context as GridContext).division
-  const live = useLiveWorkstream(division, (data as WorkstreamRow | undefined)?.id)
-  if (!data || isDetailRow(data)) return null
-  const ws = live ?? (data as WorkstreamRow)
-  return (
-    <div className="flex items-center justify-center h-full w-full">
-      <EditButton title={`Edit ${ws.name}`} className="" request={() => workstreamRequest(division, ws)} />
-    </div>
-  )
-}
-
-function OperationalAreaRenderer({ data }: ICellRendererParams) {
-  const { expandedIds, toggle } = useContext(ExpandContext)
-  if (!data || isDetailRow(data)) return null
-  const ws = data as WorkstreamRow
-  const expanded = expandedIds.has(ws.id)
-  const Icon = ICONS[ws.icon] ?? Share2
-  return (
-    <div className="flex items-center gap-2 h-full py-1">
-      <button
-        onClick={e => { e.stopPropagation(); toggle(ws.id) }}
-        className="shrink-0 text-slate-400 hover:text-[#0067b1] transition"
-        title={expanded ? 'Collapse milestones' : 'Expand milestones'}
-        aria-expanded={expanded}
-      >
-        {expanded
-          ? <ChevronDown size={15} />
-          : <ChevronRight size={15} />}
-      </button>
-      {/* The tooltip names the workbook's Icon value, so a mismatch is easy to spot. */}
-      <span title={WORKSTREAM_ICON_LABELS[ws.icon] ?? ws.icon} className="shrink-0 inline-flex">
-        <Icon size={18} className="text-slate-500" />
-      </span>
-      <span className="font-semibold text-[#0067b1] text-sm leading-snug">
-        {ws.name}<VisibleToPremera flagged={ws.needsPremeraAttention} />
-      </span>
-    </div>
-  )
-}
-
-function StatusRenderer({ data }: ICellRendererParams) {
-  if (!data || isDetailRow(data)) return null
-  const ws = data as WorkstreamRow
-  const meta = STATUS[ws.status as StatusKey]
-  return (
-    <div className="flex items-center gap-1.5 h-full px-1">
-      <StatusDot status={ws.status} title={ws.statusMessage} />
-      <span className="text-xs font-semibold" style={{ color: meta?.color }}>
-        {meta?.label ?? ws.status}
-      </span>
-    </div>
-  )
-}
-
-function FeedbackRenderer({ data }: ICellRendererParams) {
-  if (!data || isDetailRow(data)) return null
-  const ws = data as WorkstreamRow
-  return (
-    <div className="flex items-center justify-center h-full w-full" onClick={e => e.stopPropagation()}>
-      <QuickFeedback itemId={ws.id} itemLabel={ws.name} />
-    </div>
-  )
-}
-
-function ActionRequiredRenderer({ data, context }: ICellRendererParams) {
-  if (!data || isDetailRow(data)) return null
-  const ws = data as WorkstreamRow
-  if (!ws.premeraActionRequired) return null
-  // Use AG-Grid context prop — the only mechanism that crosses the separate React root boundary
-  const nav = (context as { navigate?: (to: string) => void })?.navigate
-  return (
-    <div className="flex items-center justify-center h-full w-full">
-      <button
-        title="View risks & issues requiring Premera attention"
-        onClick={(e) => { e.stopPropagation(); nav?.('/risks') }}
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
-      >
-        <Flag size={12} className="text-red-500" />
-        <span>View</span>
-      </button>
-    </div>
-  )
-}
-
-function BulletsRenderer({ value }: ICellRendererParams) {
-  const items = value as string[] | undefined
-  if (!items?.length) return null
-  return (
-    <ul className="space-y-1 py-2">
-      {items.map((t, i) => (
-        <li key={i} className="flex gap-2 text-sm text-slate-700 leading-snug">
-          <span className="text-slate-400 shrink-0">•</span>
-          <span>{t}</span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function MilestoneDetailRenderer({ data, node, api, context }: ICellRendererParams) {
-  const division = (context as GridContext).division
-  const row = data as DetailRow
-  const live = useLiveWorkstream(division, row?._parentId)
-  const ref = useRef<HTMLDivElement>(null)
-  // Long milestone text wraps, so size the full-width row to its real content
-  // instead of the per-row estimate in getRowHeight.
-  useEffect(() => {
-    const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => {
-      const h = el.offsetHeight
-      if (h && h !== node.rowHeight) {
-        node.setRowHeight(h)
-        api.onRowHeightChanged()
-      }
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [node, api])
-  if (!row) return null
-  return (
-    <div ref={ref} className="px-6 py-4 bg-[#f8fafc] border-l-4 border-[#0067b1] whitespace-normal">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-          Key Milestones — {row.name}
-        </span>
-      </div>
-      <MilestoneTable
-        headLabel="Key Milestones"
-        statusLabel="Status"
-        sections={live?.milestones ?? row.milestones}
-        locate={workstreamMilestones(division, row._parentId)}
-        where={`${division.toUpperCase()} / ${row.name}`}
-        headColor="#dfe3e6"
-        headTextColor="#374151"
-        sectionColor="#f1f5f9"
-        sectionTextColor="#475569"
-      />
-    </div>
-  )
-}
+const milestoneCount = (w: Workstream) => (w.milestones ?? []).reduce((n, sec) => n + sec.rows.length, 0)
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -353,7 +150,6 @@ export default function ProgramLevel() {
   // The ITO/BPO division whose data the grid/scorecard use. Stays put while the Transition
   // tab (which has its own content) is open, so switching back restores the same view.
   const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const canEdit = !!useEditor()
   const p = data.program[division]
   const [query, setQuery] = useState('')
@@ -369,132 +165,71 @@ export default function ProgramLevel() {
   // Synced from the workbook; the bundled copy only covers an API that predates the block.
   const transition = data.transition ?? TRANSITION_DATA
 
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }, [])
-
-  const expandContext = useMemo(() => ({ expandedIds, toggle: toggleExpand }), [expandedIds, toggleExpand])
-  // Stable on purpose: a new context object makes AG-Grid redraw every cell, remounting an open thumbs popup.
-  const gridContext = useMemo<GridContext>(() => ({ navigate, division }), [navigate, division])
-
   const handleTabChange = useCallback((k: ProgramTab) => {
     setTab(k)
     if (k !== 'transition') setDivision(k)
-    setExpandedIds(new Set())
   }, [])
 
-  // Build row data: workstream rows interleaved with full-width detail rows
-  const rowData = useMemo<GridRow[]>(() => {
-    const rows: GridRow[] = []
-    for (const ws of workstreams) {
-      const expanded = expandedIds.has(ws.id)
-      rows.push(ws)
-      if (expanded) {
-        rows.push({
-          _rowType: 'detail',
-          _parentId: ws.id,
-          milestones: ws.milestones ?? [],
-          name: ws.name,
-          icon: ws.icon,
-        })
-      }
-    }
-    return rows
-  }, [workstreams, expandedIds])
+  const columns = useMemo<ColDef<Workstream>[]>(() => [
+    renderColumn<Workstream>({ headerName: 'Operational Area', flex: 2, minWidth: 200 }, (w) => {
+      const Icon = ICONS[w.icon] ?? Share2
+      return (
+        <div className="flex items-center gap-2 min-w-0">
+          {/* The tooltip names the workbook's Icon value, so a mismatch is easy to spot. */}
+          <span title={WORKSTREAM_ICON_LABELS[w.icon] ?? w.icon} className="shrink-0 inline-flex"><Icon size={18} className="text-slate-500" /></span>
+          <Clamp title={w.name}><span className="font-semibold text-primary">{w.name}</span><VisibleToPremera flagged={w.needsPremeraAttention} /></Clamp>
+        </div>
+      )
+    }),
+    { ...statusColumn<Workstream>('Status', (w) => w.status as StatusKey, 130), tooltipValueGetter: (tp) => tp.data?.statusMessage },
+    renderColumn<Workstream>({ headerName: 'Feedback', width: 100 }, (w) => <QuickFeedback itemId={w.id} itemLabel={w.name} />),
+    renderColumn<Workstream>({ headerName: 'Action Required', width: 140 }, (w) => w.premeraActionRequired && (
+      <button
+        title="View risks & issues requiring Premera attention"
+        onClick={() => navigate('/risks')}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
+      >
+        <Flag size={12} className="text-red-500" /> View
+      </button>
+    )),
+    { headerName: 'Key Accomplishments', flex: 3, minWidth: 220, valueGetter: (vp) => vp.data?.accomplishments },
+    { headerName: 'Planned Activities', flex: 3, minWidth: 220, valueGetter: (vp) => vp.data?.activities },
+    renderColumn<Workstream>({ headerName: 'Milestones', width: 120 }, (w) => (
+      <span className="text-xs font-semibold text-primary whitespace-nowrap" title="Click the row to see its milestones">
+        {milestoneCount(w)} milestone{milestoneCount(w) === 1 ? '' : 's'} ›
+      </span>
+    )),
+    ...editColumn<Workstream>(canEdit, (w) => workstreamRequest(division, w), (w) => `Edit ${w.name}`),
+  ], [canEdit, division, navigate])
 
-  const columnDefs = useMemo<ColDef[]>(() => [
-    {
-      headerName: 'Operational Area',
-      field: 'name',
-      minWidth: 160,
-      flex: 2,
-      sortable: true,
-      resizable: true,
-      cellRenderer: OperationalAreaRenderer,
-      autoHeight: true,
-      wrapText: true,
-    },
-    {
-      headerName: 'Status',
-      field: 'status',
-      width: 150,
-      sortable: true,
-      resizable: true,
-      cellRenderer: StatusRenderer,
-    },
-    {
-      headerName: 'Feedback',
-      colId: 'feedback',
-      width: 110,
-      sortable: false,
-      resizable: true,
-      cellRenderer: FeedbackRenderer,
-      headerClass: 'ag-center-aligned-header',
-    },
-    {
-      headerName: 'Action Required',
-      field: 'premeraActionRequired',
-      width: 145,
-      sortable: true,
-      resizable: true,
-      cellRenderer: ActionRequiredRenderer,
-      headerClass: 'ag-center-aligned-header',
-    },
-    {
-      headerName: 'Key Accomplishments',
-      field: 'accomplishments',
-      minWidth: 200,
-      flex: 3,
-      sortable: false,
-      resizable: true,
-      cellRenderer: BulletsRenderer,
-      autoHeight: true,
-      wrapText: true,
-    },
-    {
-      headerName: 'Planned Activities',
-      field: 'activities',
-      minWidth: 200,
-      flex: 3,
-      sortable: false,
-      resizable: true,
-      cellRenderer: BulletsRenderer,
-      autoHeight: true,
-      wrapText: true,
-    },
-    ...(canEdit ? [{
-      headerName: 'Edit',
-      colId: 'edit',
-      width: 70,
-      sortable: false,
-      resizable: false,
-      cellRenderer: EditRenderer,
-      headerClass: 'ag-center-aligned-header',
-    }] : []),
-  ], [canEdit])
-
-  const defaultColDef = useMemo<ColDef>(() => ({ resizable: true }), [])
-
-  const getRowId = useCallback((params: GetRowIdParams) => {
-    const row = params.data as GridRow
-    return isDetailRow(row) ? `detail-${row._parentId}` : row.id
-  }, [])
-
-  const isFullWidthRow = useCallback((params: IsFullWidthRowParams) =>
-    isDetailRow(params.rowNode.data), [])
-
-  // Estimate height for detail rows based on milestone content
-  const getRowHeight = useCallback((params: { data: unknown }) => {
-    const row = params.data as GridRow
-    if (!isDetailRow(row)) return undefined
-    const totalRows = row.milestones.reduce((sum, s) => sum + s.rows.length, 0)
-    // header: 44 + section-headers × 32 + data-rows × 38 + chrome: 48
-    return 44 + row.milestones.length * 32 + totalRows * 38 + 64
-  }, [])
+  const details = useCallback((w: Workstream) => ({
+    title: w.name,
+    subtitle: `${TAB_META[division].short} operational area`,
+    fields: [
+      { label: 'Status', value: <StatusLabel status={w.status as StatusKey} /> },
+      { label: 'Status note', value: w.statusMessage || '—' },
+      { label: 'Premera action required', value: w.premeraActionRequired ? 'Yes' : 'No' },
+      ...(canEdit ? [{ label: 'Premera can see it', value: w.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
+      { label: 'Key accomplishments', value: <FullList items={w.accomplishments} /> },
+      { label: 'Planned activities', value: <FullList items={w.activities} /> },
+    ],
+    extra: (
+      <div className="rounded-lg border border-border overflow-hidden">
+        <MilestoneTable
+          headLabel="Key Milestones"
+          statusLabel="Status"
+          sections={w.milestones ?? []}
+          headColor="#dfe3e6"
+          headTextColor="#374151"
+          sectionColor="#f1f5f9"
+          sectionTextColor="#475569"
+          locate={workstreamMilestones(division, w.id)}
+          where={`${division.toUpperCase()} / ${w.name}`}
+        />
+      </div>
+    ),
+    actions: <EditButton className="" title={`Edit ${w.name}`} request={() => workstreamRequest(division, w)} />,
+  }), [canEdit, division])
 
   return (
     <div className="slide">
@@ -540,26 +275,28 @@ export default function ProgramLevel() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <label className="relative w-full sm:w-64">
             <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-            <input
+            <Input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search operational areas"
               aria-label="Search operational areas"
-              className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#0067b1]"
+              className="h-8 pl-7 text-xs"
             />
           </label>
-          <select
+          <Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             aria-label="Status"
-            className="px-2 py-1.5 text-xs rounded-md border border-slate-300 bg-white"
+            className="h-8 w-auto text-xs"
           >
             <option value="">Any status</option>
             {LEGEND_ORDER.map((k) => <option key={k} value={k}>{STATUS[k].label}</option>)}
-          </select>
+          </Select>
           <AddButton request={() => workstreamRequest(division)}>Add operational area</AddButton>
-          <button
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => downloadCsv(`${division}-program-${new Date().toISOString().slice(0, 10)}.csv`, [
               ['Operational Area', 'Status', 'Status Note', 'Premera Attention', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
               ...workstreams.map((w) => [
@@ -572,11 +309,11 @@ export default function ProgramLevel() {
                 w.activities.join('\n'),
               ]),
             ])}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-300 bg-white text-slate-600 hover:border-slate-500 transition sm:ml-auto"
+            className="sm:ml-auto"
           >
-            <Download size={11} />
+            <Download size={12} />
             Export CSV
-          </button>
+          </Button>
         </div>
         {workstreams.length === 0 && (
           <p className="text-sm text-slate-500 text-center py-6">
@@ -584,28 +321,18 @@ export default function ProgramLevel() {
           </p>
         )}
 
-        {/* ── AG-Grid (desktop md+) ── */}
+        {/* ── Grid (desktop md+): fixed-height rows; click a row for everything, milestones included ── */}
         <div data-tour="workstream-grid" className="card overflow-hidden hidden md:block">
-          <ExpandContext.Provider value={expandContext}>
-            <AgGridReact
-              theme={portalTheme}
-              rowData={rowData as WorkstreamRow[]}
-              columnDefs={columnDefs}
-              defaultColDef={defaultColDef}
-              getRowId={getRowId}
-              domLayout="autoHeight"
-              pagination={true}
-              paginationPageSize={10}
-              paginationPageSizeSelector={[10, 20, 50]}
-              rowSelection={{ mode: 'singleRow', checkboxes: false, enableClickSelection: false }}
-              headerHeight={40}
-              suppressCellFocus={true}
-              isFullWidthRow={isFullWidthRow}
-              fullWidthCellRenderer={MilestoneDetailRenderer}
-              getRowHeight={getRowHeight}
-              context={gridContext}
-            />
-          </ExpandContext.Provider>
+          <DataGrid<Workstream>
+            label="Operational areas"
+            rows={workstreams}
+            columns={columns}
+            rowId={(w) => w.id}
+            rowHeight={68}
+            pageSize={10}
+            details={details}
+            emptyText="No operational areas to show."
+          />
         </div>
 
         {/* ── Accordion (mobile <md) ── */}

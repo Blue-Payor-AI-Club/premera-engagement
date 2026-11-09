@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import RiskActionsModal from './RiskActionsModal'
 import { type IssueRow } from '../data/portalData'
@@ -33,6 +33,8 @@ describe('RiskActionsModal', () => {
     const user = userEvent.setup()
     render(<RiskActionsModal issue={sampleIssue()} onClose={() => {}} />)
 
+    // The desktop grid renders asynchronously.
+    await waitFor(() => expect(screen.getAllByText('Open')).toHaveLength(2))
     const badges = screen.getAllByText('Open')
     expect(badges).toHaveLength(2)
     for (const badge of badges) {
@@ -42,8 +44,10 @@ describe('RiskActionsModal', () => {
 
     // No button wraps a status label anywhere in the modal.
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
+    // Clicking the row (badge included) opens the action's details — it never changes the status.
     await user.click(badges[0])
-    expect(screen.getAllByText('Open')).toHaveLength(2)
+    const details = await screen.findByRole('dialog', { name: 'Review runbook drafts' })
+    expect(details).toHaveTextContent('Open')
   })
 
   it('has no "click a status badge to update" hint', () => {
@@ -52,11 +56,11 @@ describe('RiskActionsModal', () => {
     expect(screen.getByText(/read-only/i)).toBeInTheDocument()
   })
 
-  it('renders mitigations, owner, and due date from props', () => {
+  it('renders mitigations, owner, and due date from props', async () => {
     render(<RiskActionsModal issue={sampleIssue()} onClose={() => {}} />)
     expect(screen.getByText('Schedule review sessions')).toBeInTheDocument()
-    expect(screen.getAllByText('Premera Operations').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('3/8').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Premera Operations')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText((t) => t.includes('3/8')).length).toBeGreaterThan(0)
   })
 
   it('calls onClose when the close button is clicked — it is the only button left in a read-only modal', async () => {

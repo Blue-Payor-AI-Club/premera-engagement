@@ -1,9 +1,16 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-import { Pencil, Plus, X } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import { PortalDataContext, useUstView } from '../context/PortalDataContext'
 import type { PortalData } from '../data/portalData'
 import { STATUS_OPTIONS, implausibleYear, normalizeDate, type EditRequest, type Field, type Values } from '../lib/editRequests'
-import { ErrorBanner, btnDanger, btnPrimary, btnSecondary, inputCls } from './ui'
+import { ErrorBanner } from './ui'
+import { Button } from './ui/button'
+import { buttonVariants } from './ui/variants'
+import { cn } from '../lib/utils'
+import { Checkbox } from './ui/checkbox'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { Input, Select, Textarea } from './ui/input'
+import { Label } from './ui/label'
 
 // In-app editing for UST users. Every editable thing on screen opens this one form, driven by a
 // field list that mirrors that row's workbook columns, so the app and Excel accept the same values.
@@ -39,33 +46,35 @@ export function EditButton({ request, title = 'Edit', className = 'ml-1.5' }: { 
       onClick={(e) => { e.stopPropagation(); open(request()) }}
       title={title}
       aria-label={title}
-      className={`inline-flex items-center justify-center align-middle p-1 rounded text-slate-400 hover:text-[#0067b1] hover:bg-slate-100 transition ${className}`}
+      className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-7 w-7 align-middle text-slate-400 hover:text-primary', className)}
     >
-      <Pencil size={12} aria-hidden />
+      <Pencil size={13} aria-hidden />
     </button>
   )
 }
 
-/** The "Edit" column header of a table — rendered for UST users only, like the cells below it. */
-export function EditHeader({ className = '', rowSpan }: { className?: string; rowSpan?: number }) {
-  if (!useEditor()) return null
-  return <th scope="col" rowSpan={rowSpan} className={`text-center font-semibold px-2 py-2 w-14 ${className}`}>Edit</th>
-}
-
-/** One row's cell in the "Edit" column. */
-export function EditCell({ request, title, className = '' }: { request: () => EditRequest; title?: string; className?: string }) {
-  if (!useEditor()) return null
-  return <td className={`px-2 py-1.5 text-center ${className}`}><EditButton request={request} title={title} className="" /></td>
-}
-
-export function AddButton({ request, children }: { request: () => EditRequest; children: ReactNode }) {
+/** `compact`: just a "+" (children become its tooltip and accessible name) — for tight cells. */
+export function AddButton({ request, children, compact }: { request: () => EditRequest; children: ReactNode; compact?: boolean }) {
   const open = useEditor()
   if (!open) return null
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); open(request()) }}
+        title={String(children)}
+        aria-label={String(children)}
+        className={cn(buttonVariants({ variant: 'outline', size: 'icon' }), 'h-6 w-6 shrink-0 border-dashed text-slate-500 hover:border-primary hover:text-primary')}
+      >
+        <Plus size={12} aria-hidden />
+      </button>
+    )
+  }
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); open(request()) }}
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border border-dashed border-slate-300 text-slate-600 bg-white hover:border-[#0067b1] hover:text-[#0067b1] transition"
+      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 border-dashed text-xs text-slate-600 hover:border-primary')}
     >
       <Plus size={12} aria-hidden /> {children}
     </button>
@@ -130,84 +139,71 @@ function EditDialog({ request, onClose }: { request: EditRequest; onClose: () =>
     run(`Deleted ${short(request.label)}`, request.remove)
   }
 
+  const title = `${request.isNew ? 'Add' : 'Edit'} ${request.label}`
   return (
-    <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 px-4"
-      onClick={() => !busy && onClose()}
-      onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) onClose() } }}
-    >
-      <form
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${request.isNew ? 'Add' : 'Edit'} ${request.label}`}
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-      >
-        <div className="flex items-start justify-between gap-4 px-5 py-3 border-b border-slate-200">
-          <h2 className="text-sm font-semibold text-slate-800 min-w-0 break-words">
-            {request.isNew ? 'Add' : 'Edit'} {request.label}
-          </h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 p-1 rounded hover:bg-slate-100">
-            <X size={16} className="text-slate-500" />
-          </button>
-        </div>
+    // Radix (shadcn Dialog) handles Esc, focus and stacking over another dialog (e.g. the actions window).
+    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose() }}>
+      <DialogContent aria-describedby={undefined}>
+        <form onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
 
-        <div className="px-5 py-4 space-y-3">
-          {request.fields.map((f, i) => {
-            const id = `edit-${f.key}`
-            const val = form[f.key]
-            const set = (v: string | boolean) => setForm((s) => ({ ...s, [f.key]: v }))
-            if (f.type === 'bool') {
+          <DialogBody className="space-y-3.5">
+            {request.fields.map((f, i) => {
+              const id = `edit-${f.key}`
+              const val = form[f.key]
+              const set = (v: string | boolean) => setForm((s) => ({ ...s, [f.key]: v }))
+              if (f.type === 'bool') {
+                return (
+                  <div key={f.key} className="flex items-center gap-2">
+                    <Checkbox id={id} checked={val === true} onCheckedChange={(c) => set(c === true)} />
+                    <Label htmlFor={id} className="text-sm font-normal text-slate-700">{f.label}</Label>
+                  </div>
+                )
+              }
+              const options = f.type === 'status' ? STATUS_OPTIONS : f.options
+              const invalid = !!fieldErrors[f.key]
               return (
-                <label key={f.key} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={val === true} onChange={(e) => set(e.target.checked)} />
-                  {f.label}
-                </label>
+                <div key={f.key} className="space-y-1.5">
+                  <Label htmlFor={id}>{f.label}{f.required && <span className="text-red-600"> *</span>}</Label>
+                  {options ? (
+                    <Select id={id} autoFocus={i === 0} value={String(val)} onChange={(e) => set(e.target.value)} aria-invalid={invalid}>
+                      {!f.required && <option value="">{f.type === 'status' ? 'N/A' : '—'}</option>}
+                      {f.required && !val && <option value="" disabled>Choose…</option>}
+                      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Select>
+                  ) : f.type === 'textarea' || f.type === 'lines' ? (
+                    <Textarea id={id} autoFocus={i === 0} rows={f.type === 'lines' ? 4 : 3} value={String(val)} onChange={(e) => set(e.target.value)} aria-invalid={invalid} />
+                  ) : (
+                    <Input
+                      id={id}
+                      autoFocus={i === 0}
+                      value={String(val)}
+                      onChange={(e) => set(e.target.value)}
+                      placeholder={f.type === 'date' ? 'M/D/YYYY, TBD or N/A' : undefined}
+                      aria-invalid={invalid}
+                    />
+                  )}
+                  {f.type === 'lines' && <p className="text-[11px] text-slate-400">One item per line.</p>}
+                  {invalid && <p className="text-xs text-red-600">{fieldErrors[f.key]}</p>}
+                </div>
               )
-            }
-            const options = f.type === 'status' ? STATUS_OPTIONS : f.options
-            return (
-              <div key={f.key}>
-                <label htmlFor={id} className="block text-xs font-semibold text-slate-600 mb-1">
-                  {f.label}{f.required && <span className="text-red-600"> *</span>}
-                </label>
-                {options ? (
-                  <select id={id} autoFocus={i === 0} value={String(val)} onChange={(e) => set(e.target.value)} className={inputCls}>
-                    {!f.required && <option value="">{f.type === 'status' ? 'N/A' : '—'}</option>}
-                    {f.required && !val && <option value="" disabled>Choose…</option>}
-                    {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                ) : f.type === 'textarea' || f.type === 'lines' ? (
-                  <textarea id={id} autoFocus={i === 0} rows={f.type === 'lines' ? 4 : 3} value={String(val)} onChange={(e) => set(e.target.value)} className={inputCls} />
-                ) : (
-                  <input
-                    id={id}
-                    autoFocus={i === 0}
-                    value={String(val)}
-                    onChange={(e) => set(e.target.value)}
-                    placeholder={f.type === 'date' ? 'M/D/YYYY, TBD or N/A' : undefined}
-                    className={inputCls}
-                  />
-                )}
-                {f.type === 'lines' && <p className="text-[11px] text-slate-400 mt-0.5">One item per line.</p>}
-                {fieldErrors[f.key] && <p className="text-xs text-red-600 mt-0.5">{fieldErrors[f.key]}</p>}
-              </div>
-            )
-          })}
-          {error && <ErrorBanner>{error}</ErrorBanner>}
-        </div>
+            })}
+            {error && <ErrorBanner>{error}</ErrorBanner>}
+          </DialogBody>
 
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-100">
-          <div>
-            {request.remove && <button type="button" onClick={remove} disabled={busy} className={btnDanger}>Delete</button>}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={busy} className={btnSecondary}>Cancel</button>
-            <button type="submit" disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save'}</button>
-          </div>
-        </div>
-      </form>
-    </div>
+          <DialogFooter className="justify-between">
+            <div>
+              {request.remove && <Button type="button" variant="destructive-outline" size="sm" onClick={remove} disabled={busy}>Delete</Button>}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

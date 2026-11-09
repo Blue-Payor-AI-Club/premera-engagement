@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
+import { Input, Select } from '../ui/input'
 import { Send } from 'lucide-react'
-import { Badge, ErrorBanner, Notice, Spinner, btnDanger, btnPrimary, btnSecondary, inputCls } from '../ui'
+import { Badge, ErrorBanner, Notice, Spinner, btnDanger, btnPrimary, btnSecondary } from '../ui'
 import { useResource } from '../../hooks/useResource'
 import { adminApi, type Invite } from '../../lib/adminApi'
 import { ROLES, ROLE_LABELS, type Role } from '../../lib/authApi'
@@ -60,17 +61,17 @@ export default function InvitesTab() {
       <form onSubmit={send} className="rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-slate-500 flex-1 min-w-[12rem]">
           Name
-          <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={`${inputCls} mt-1`} />
+          <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="mt-1" />
         </label>
         <label className="text-xs font-medium text-slate-500 flex-1 min-w-[14rem]">
           Email address
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" className={`${inputCls} mt-1`} />
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" className="mt-1" />
         </label>
         <label className="text-xs font-medium text-slate-500">
           Access level
-          <select aria-label="Invite role" value={role} onChange={(e) => setRole(e.target.value as Role)} className="mt-1 block rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800">
+          <Select aria-label="Invite role" value={role} onChange={(e) => setRole(e.target.value as Role)} className="mt-1 block">
             {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-          </select>
+          </Select>
         </label>
         <button type="submit" disabled={busy || !email.trim()} className={btnPrimary}><Send size={14} /> Send invite</button>
       </form>

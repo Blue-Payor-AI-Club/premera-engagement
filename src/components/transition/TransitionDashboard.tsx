@@ -1,158 +1,170 @@
-import type { ReactNode } from 'react'
+import { useMemo } from 'react'
+import type { ColDef, ColGroupDef } from 'ag-grid-community'
 import type { StatusKey } from '../../data/status'
-import type { DashboardRow, TransitionData } from '../../data/transitionData'
+import type { DashboardRow, RaidItem, TransitionData } from '../../data/transitionData'
 import StatusDot from '../StatusDot'
+import StatusLabel from '../StatusLabel'
 import StatusChip from './StatusChip'
 import VisibleToPremera from '../VisibleToPremera'
-import { AddButton, EditButton, EditCell, EditHeader } from '../Editor'
+import { AddButton, EditButton, useEditor } from '../Editor'
 import { dashboardRowRequest, raidRequest, transitionHeaderRequest } from '../../lib/editRequests'
 import OverdueTag from '../OverdueTag'
+import DataGrid, { Clamp, FullList } from '../DataGrid'
+import { flattenDashboard, type DashRow } from './dashboardRows'
+import { dateColumn, editColumn, renderColumn } from '../gridColumns'
 
-const emptyRow = (cols: number) => (
-  <tr><td colSpan={cols} className="px-3 py-4 text-center text-sm text-slate-400">Nothing shared in this section yet.</td></tr>
-)
+// The Transition Dashboard and RAID log as grids: fixed-height rows, long text cut with "…",
+// a click on a row shows all of it. Tower and Notes keep the slide's merged cells.
 
-// Header colours are taken from the source slide; body rows use a plain white/slate
-// zebra instead of the slide's per-tower fills, which read as noise on screen.
-const GROUP_HEAD = 'bg-[#9dc3e6] text-[#0b2a4a]'
-const SUB_HEAD = 'bg-[#bdd7ee] text-[#0b2a4a]'
-const PLAIN_HEAD = 'bg-white text-slate-900'
-const RAID_HEAD = 'bg-[#0e9aae] text-white'
-const STRIPE_ODD = 'bg-[#e8f1fa]' // visible but quiet; the slide's per-tower fills are deliberately not used
-
-const th = 'border border-slate-300 px-2 py-2 text-center text-xs font-bold leading-tight'
-const td = 'border border-slate-200 px-2 py-1.5 text-[13px] text-slate-700 align-middle'
-
-/** A status dot; "N/A" when the phase doesn't apply, or nothing at all when the slide leaves the whole phase blank. */
-function Status({ status, blank = false }: { status: StatusKey | null; blank?: boolean }) {
-  return (
-    <td className={`${td} text-center`}>
-      {status ? <StatusDot status={status} size={11} /> : blank ? null : <span className="text-slate-500">N/A</span>}
-    </td>
-  )
-}
-
-function Notes({ row }: { row: DashboardRow }): ReactNode {
-  if (!row.notes?.length) return null
-  return (
-    <ul className="list-disc pl-4 space-y-1 marker:text-slate-500">
-      {row.notes.map((n, i) => (
-        <li key={i} className={n.alert ? 'text-red-600' : undefined}>{n.text}</li>
-      ))}
+const NoteLines = ({ row }: { row: DashboardRow }) =>
+  row.notes?.length ? (
+    <ul className="list-disc pl-4 space-y-1">
+      {row.notes.map((n, k) => <li key={k} className={n.alert ? 'text-red-600' : undefined}>{n.text}</li>)}
     </ul>
-  )
+  ) : <span className="text-slate-400">—</span>
+
+/** A status dot (word in the tooltip); "N/A" when the phase doesn't apply, blank when the slide leaves it empty. */
+function PhaseStatus({ status, blank = false }: { status: StatusKey | null; blank?: boolean }) {
+  if (status) return <StatusDot status={status} size={11} />
+  return blank ? null : <span className="text-slate-500 text-xs">N/A</span>
 }
 
-function WorkstreamTable({ data }: { data: TransitionData }) {
-  const groups = data.dashboard
-  let stripe = 0 // zebra index across the whole table, not per tower
+function WorkstreamGrid({ data }: { data: TransitionData }) {
+  const canEdit = !!useEditor()
+  const rows = useMemo(() => flattenDashboard(data.dashboard), [data.dashboard])
+  const columns = useMemo<(ColDef<DashRow> | ColGroupDef<DashRow>)[]>(() => {
+    const text = (headerName: string, get: (r: DashboardRow) => string, headerTooltip?: string, width = 94): ColDef<DashRow> =>
+      ({ headerName, headerTooltip, width, valueGetter: (p) => (p.data ? get(p.data.row) || '' : '') })
+    return [
+      renderColumn<DashRow>({
+        headerName: 'Tower',
+        width: 150,
+        pinned: 'left',
+        rowSpan: (p) => (p.data && p.data.i === 0 ? p.data.groupSize : 1),
+        cellClass: 'flex items-start bg-white font-bold text-[#10285c] !border-r !border-slate-200',
+      }, (r) => r.i === 0 && (
+        <div className="py-2 flex items-start gap-1.5 w-full">
+          <Clamp title={r.tower} lines={r.groupSize > 1 ? 3 : 2}>{r.tower}</Clamp>
+          <span className="ml-auto font-normal" data-no-details><AddButton compact request={() => dashboardRowRequest(data, r.g)}>{`Add a row to ${r.tower}`}</AddButton></span>
+        </div>
+      )),
+      renderColumn<DashRow>({ headerName: 'Workstream', width: 175, pinned: 'left' }, (r) => (
+        <Clamp title={r.row.workstream}><span className="font-bold text-[#10285c]">{r.row.workstream}</span><VisibleToPremera flagged={r.row.needsPremeraAttention} /></Clamp>
+      )),
+      {
+        headerName: 'Discovery / Planning / Onboarding',
+        headerClass: 'bg-[#9dc3e6] text-[#0b2a4a]',
+        children: [
+          renderColumn<DashRow>({ headerName: 'Status', width: 70, cellClass: 'flex items-center justify-center' }, (r) => <PhaseStatus status={r.row.planning.status} />),
+          text('Start', (r) => r.planning.start),
+          text('SOW Submit', (r) => r.planning.sowSubmit, 'SOW Planned Submit Date'),
+          text('SOW Approval', (r) => r.planning.sowApproval, 'SOW Target Approval Date'),
+          text('Onboarding', (r) => r.planning.onboardingComplete, 'Planned Onboarding Completion', 104),
+        ],
+      },
+      {
+        headerName: 'Transition',
+        headerClass: 'bg-[#9dc3e6] text-[#0b2a4a]',
+        children: [
+          renderColumn<DashRow>({ headerName: 'Status', width: 70, cellClass: 'flex items-center justify-center' }, (r) => (
+            <PhaseStatus status={r.row.transition.status} blank={r.row.transition.start === '' && r.row.transition.goLive === ''} />
+          )),
+          text('Start', (r) => r.transition.start),
+          text('Go-Live', (r) => r.transition.goLive),
+        ],
+      },
+      renderColumn<DashRow>({
+        headerName: 'Notes',
+        flex: 1,
+        minWidth: 200,
+        rowSpan: (p) => (p.data && p.data.notesSpan > 1 ? p.data.notesSpan : 1),
+        cellClass: 'flex items-start bg-white text-[12px] !border-l !border-slate-200',
+      }, (r) => (r.notesSpan > 0 && r.row.notes?.length ? (
+        <div className="py-2">
+          <Clamp lines={r.notesSpan > 1 ? 3 : 2} title={r.row.notes.map((n) => n.text).join('\n')}>
+            {r.row.notes.map((n, k) => <span key={k} className={n.alert ? 'text-red-600' : undefined}>• {n.text} </span>)}
+          </Clamp>
+        </div>
+      ) : null)),
+      ...editColumn<DashRow>(canEdit, (r) => dashboardRowRequest(data, r.g, r.i), (r) => `Edit ${r.row.workstream}`),
+    ]
+  }, [canEdit, data])
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1080px] border-collapse">
-        <caption className="sr-only">Transition program workstream dashboard</caption>
-        <thead>
-          <tr>
-            <th scope="col" rowSpan={2} className={`${th} ${PLAIN_HEAD} text-left w-[13%]`}>Tower</th>
-            <th scope="col" rowSpan={2} className={`${th} ${PLAIN_HEAD} text-left w-[15%]`}>Workstream</th>
-            <th scope="colgroup" colSpan={5} className={`${th} ${GROUP_HEAD}`}>Discovery/Planning/Onboarding</th>
-            <th scope="colgroup" colSpan={3} className={`${th} ${GROUP_HEAD}`}>Transition</th>
-            <th scope="col" rowSpan={2} className={`${th} ${PLAIN_HEAD} w-[18%]`}>Notes</th>
-            <EditHeader rowSpan={2} className={`${th} ${PLAIN_HEAD}`} />
-          </tr>
-          <tr>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Status</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Start</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>SOW Planned Submit Date</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>SOW Target Approval Date</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Planned Onboarding Completion</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Status</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Start</th>
-            <th scope="col" className={`${th} ${SUB_HEAD}`}>Go-Live</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.length === 0 && emptyRow(12)}
-          {groups.map((group, g) => {
-            let notesCoveredFor = 0 // rows still hidden under a merged Notes cell
-            return group.rows.map((row, i) => {
-              const bg = stripe++ % 2 === 0 ? 'bg-white' : STRIPE_ODD
-              const showNotes = notesCoveredFor === 0
-              if (showNotes && row.notesRowSpan) notesCoveredFor = row.notesRowSpan
-              const rendersNotesCell = showNotes
-              if (notesCoveredFor > 0) notesCoveredFor--
-              return (
-                <tr key={`${g}:${i}`} className={bg} data-stripe={bg === 'bg-white' ? 'even' : 'odd'}>
-                  {i === 0 && (
-                    <th scope="rowgroup" rowSpan={group.rows.length} className={`${td} bg-white text-left font-bold text-[#10285c]`}>
-                      {group.tower}
-                      <div className="mt-1 font-normal"><AddButton request={() => dashboardRowRequest(data, g)}>Add row</AddButton></div>
-                    </th>
-                  )}
-                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /></th>
-                  <Status status={row.planning.status} />
-                  <td className={td}>{row.planning.start}</td>
-                  <td className={td}>{row.planning.sowSubmit}</td>
-                  <td className={td}>{row.planning.sowApproval}</td>
-                  <td className={td}>{row.planning.onboardingComplete}</td>
-                  <Status status={row.transition.status} blank={row.transition.start === '' && row.transition.goLive === ''} />
-                  <td className={td}>{row.transition.start}</td>
-                  <td className={td}>{row.transition.goLive}</td>
-                  {rendersNotesCell && (
-                    <td rowSpan={row.notesRowSpan ?? 1} className={`${td} bg-white text-[12px]`}>
-                      <Notes row={row} />
-                    </td>
-                  )}
-                  <EditCell className={td} title={`Edit ${row.workstream}`} request={() => dashboardRowRequest(data, g, i)} />
-                </tr>
-              )
-            })
-          })}
-        </tbody>
-      </table>
+    <>
+      <DataGrid<DashRow>
+        label="Transition program workstream dashboard"
+        rows={rows}
+        columns={columns}
+        rowId={(r) => r.id}
+        rowHeight={52}
+        pageSize={500}
+        emptyText="Nothing shared in this section yet."
+        details={(r) => ({
+          title: r.row.workstream,
+          subtitle: r.tower,
+          fields: [
+            { label: 'Planning status', value: <StatusLabel status={r.row.planning.status} /> },
+            { label: 'Planning start', value: r.row.planning.start || '—' },
+            { label: 'SOW planned submit', value: r.row.planning.sowSubmit || '—' },
+            { label: 'SOW target approval', value: r.row.planning.sowApproval || '—' },
+            { label: 'Planned onboarding completion', value: r.row.planning.onboardingComplete || '—' },
+            { label: 'Transition status', value: <StatusLabel status={r.row.transition.status} /> },
+            { label: 'Transition start', value: r.row.transition.start || '—' },
+            { label: 'Go-live', value: r.row.transition.goLive || '—' },
+            { label: 'Notes', value: <NoteLines row={r.row} /> },
+            ...(canEdit ? [{ label: 'Premera can see it', value: r.row.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
+          ],
+          actions: <EditButton className="" title={`Edit ${r.row.workstream}`} request={() => dashboardRowRequest(data, r.g, r.i)} />,
+        })}
+      />
       <div className="p-2"><AddButton request={() => dashboardRowRequest(data)}>Add tower / workstream</AddButton></div>
-    </div>
+    </>
   )
 }
 
-function RaidTable({ data }: { data: TransitionData }) {
-  const items = data.raid
+type RaidRow = RaidItem & { id: string; index: number }
+const raidDone = (r: RaidItem) => r.status === 'Closed' || r.status === 'Mitigated'
+
+function RaidGrid({ data }: { data: TransitionData }) {
+  const canEdit = !!useEditor()
+  const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, id: String(index), index })), [data.raid])
+  const columns = useMemo<ColDef<RaidRow>[]>(() => [
+    renderColumn<RaidRow>({ headerName: 'RAID', width: 80, cellClass: 'flex items-center justify-center font-semibold' }, (r) => r.type),
+    renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 260 }, (r) => (
+      <Clamp title={r.description}>{r.description}<VisibleToPremera flagged={r.needsPremeraAttention} /></Clamp>
+    )),
+    { headerName: 'Mitigation Plan / Next Steps', flex: 2, minWidth: 260, valueGetter: (p) => p.data?.mitigation },
+    { headerName: 'Owner', width: 140, valueGetter: (p) => p.data?.owner },
+    dateColumn<RaidRow>('Due Date', (r) => r.dueDate, raidDone, 120),
+    { headerName: 'Status', width: 120, valueGetter: (p) => p.data?.status },
+    ...editColumn<RaidRow>(canEdit, (r) => raidRequest(data, r.index), () => 'Edit RAID item'),
+  ], [canEdit, data])
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] border-collapse">
-        <caption className="sr-only">RAID log</caption>
-        <thead>
-          <tr>
-            {['RAID', 'Description', 'Mitigation Plan/Next Steps', 'Owner', 'Due Date', 'Status'].map((h) => (
-              <th key={h} scope="col" className={`${th} ${RAID_HEAD} text-sm py-2.5`}>{h}</th>
-            ))}
-            <EditHeader className={`${th} ${RAID_HEAD} text-sm py-2.5`} />
-          </tr>
-        </thead>
-        <tbody>
-          {items.length === 0 && emptyRow(7)}
-          {items.map((r, i) => (
-            <tr key={i} className={i % 2 === 0 ? 'bg-white' : STRIPE_ODD}>
-              <td className={`${td} text-center font-semibold`}>{r.type}</td>
-              <td className={`${td} text-[12px] align-top`}>
-                {r.description}<VisibleToPremera flagged={r.needsPremeraAttention} />
-              </td>
-              <td className={`${td} text-[12px] align-top`}>
-                {r.mitigation.length > 1 ? (
-                  <ul className="list-disc pl-4 space-y-1">{r.mitigation.map((m, j) => <li key={j}>{m}</li>)}</ul>
-                ) : (
-                  r.mitigation[0]
-                )}
-              </td>
-              <td className={`${td} text-center text-[12px]`}>{r.owner}</td>
-              <td className={`${td} text-center text-[12px]`}>{r.dueDate}<OverdueTag date={r.dueDate} done={r.status === 'Closed' || r.status === 'Mitigated'} /></td>
-              <td className={`${td} text-center text-[12px]`}>{r.status}</td>
-              <EditCell className={td} title="Edit RAID item" request={() => raidRequest(data, i)} />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <>
+      <DataGrid<RaidRow>
+        label="RAID log"
+        rows={rows}
+        columns={columns}
+        rowId={(r) => r.id}
+        rowHeight={56}
+        emptyText="Nothing shared in this section yet."
+        details={(r) => ({
+          title: r.description,
+          subtitle: `RAID: ${r.type}`,
+          fields: [
+            { label: 'Mitigation plan / next steps', value: <FullList items={r.mitigation} /> },
+            { label: 'Owner', value: r.owner || '—' },
+            { label: 'Due date', value: <>{r.dueDate || '—'}<OverdueTag date={r.dueDate} done={raidDone(r)} /></> },
+            { label: 'Status', value: r.status || '—' },
+            ...(canEdit ? [{ label: 'Premera can see it', value: r.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
+          ],
+          actions: <EditButton className="" title="Edit RAID item" request={() => raidRequest(data, r.index)} />,
+        })}
+      />
       <div className="p-2"><AddButton request={() => raidRequest(data)}>Add RAID item</AddButton></div>
-    </div>
+    </>
   )
 }
 
@@ -174,10 +186,10 @@ export default function TransitionDashboard({ data }: { data: TransitionData }) 
       </div>
 
       <div className="card overflow-hidden">
-        <WorkstreamTable data={data} />
+        <WorkstreamGrid data={data} />
       </div>
       <div className="card overflow-hidden">
-        <RaidTable data={data} />
+        <RaidGrid data={data} />
       </div>
     </section>
   )

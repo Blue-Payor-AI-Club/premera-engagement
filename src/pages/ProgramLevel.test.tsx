@@ -83,11 +83,12 @@ describe('/program — Transition tab', () => {
     expect(screen.getByText('Synced overall paragraph.')).toBeInTheDocument()
     expect(screen.getByLabelText(/premera contacts/i)).toHaveTextContent('Synced Sponsor:Sam Synced')
     expect(screen.getByText('Synced risk')).toBeInTheDocument()
-    expect(screen.getByText('Synced Tower')).toBeInTheDocument()
+    // The dashboard grid renders asynchronously.
+    expect(await screen.findByText('Synced Tower')).toBeInTheDocument()
     expect(screen.getByText('Synced Workstream')).toBeInTheDocument()
-    expect(screen.getByText('Synced note')).toBeInTheDocument()
+    expect(screen.getByText(/Synced note/)).toBeInTheDocument()
     expect(screen.getByText('Synced RAID item')).toBeInTheDocument()
-    expect(screen.getByText('Synced step')).toBeInTheDocument()
+    expect(screen.getByText(/Synced step/)).toBeInTheDocument()
 
     // None of the bundled slide content leaks through.
     expect(screen.queryByText('Service Desk and ITOC')).toBeNull()

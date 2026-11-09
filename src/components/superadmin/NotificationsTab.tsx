@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Textarea } from '../ui/input'
+import { Checkbox } from '../ui/checkbox'
 import { Badge, ErrorBanner, Notice, Spinner, btnPrimary } from '../ui'
 import { useResource } from '../../hooks/useResource'
 import { adminApi, type NotifiableRole, type NotificationSetting } from '../../lib/adminApi'
@@ -54,7 +56,7 @@ function CategoryCard({ setting, onSaved }: { setting: NotificationSetting; onSa
           <p className="text-sm text-slate-500">{setting.description}</p>
         </div>
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700 shrink-0">
-          <input type="checkbox" checked={enabled} onChange={(e) => { setEnabled(e.target.checked); setSaved(false) }} aria-label={`${setting.label} enabled`} />
+          <Checkbox checked={enabled} onCheckedChange={(c) => { setEnabled(c === true); setSaved(false) }} aria-label={`${setting.label} enabled`} />
           Enabled
         </label>
       </div>
@@ -65,7 +67,7 @@ function CategoryCard({ setting, onSaved }: { setting: NotificationSetting; onSa
           <div className="flex flex-wrap gap-4">
             {NOTIFIABLE_ROLES.map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={roles.includes(r)} onChange={() => toggleRole(r)} aria-label={`${ROLE_LABELS[r]} for ${setting.label}`} />
+                <Checkbox checked={roles.includes(r)} onCheckedChange={() => toggleRole(r)} aria-label={`${ROLE_LABELS[r]} for ${setting.label}`} />
                 {ROLE_LABELS[r]}
               </label>
             ))}
@@ -73,14 +75,13 @@ function CategoryCard({ setting, onSaved }: { setting: NotificationSetting; onSa
         </div>
         <label className="block text-xs font-medium text-slate-500">
           Additional recipients (one per line, e.g. a shared mailbox)
-          <textarea
+          <Textarea
             aria-label={`Additional recipients for ${setting.label}`}
             rows={2}
             value={emailText}
             onChange={(e) => { setEmailText(e.target.value); setSaved(false) }}
             placeholder="team@ust.com"
-            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 font-mono resize-y"
-          />
+            className="mt-1 block w-full font-mono resize-y" />
         </label>
       </fieldset>
 

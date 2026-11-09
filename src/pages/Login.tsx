@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Input, Textarea } from '../components/ui/input'
 import { ShieldAlert, MailCheck } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
-import { ErrorBanner, btnPrimary, btnSecondary, inputCls } from '../components/ui'
+import { ErrorBanner, btnPrimary, btnSecondary } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../lib/api'
 import { requestCode, submitAccessRequest, trustedLogin, verifyCode } from '../lib/authApi'
@@ -107,7 +108,7 @@ export default function Login() {
         <form onSubmit={sendCode} className="space-y-4">
           <label className="block text-sm font-medium text-slate-700">
             Email address
-            <input
+            <Input
               type="email"
               autoComplete="email"
               autoFocus
@@ -115,8 +116,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
-              className={`${inputCls} mt-1`}
-            />
+              className="mt-1" />
           </label>
           {error && <ErrorBanner>{error}</ErrorBanner>}
           <button type="submit" disabled={busy || !email.trim()} className={`${btnPrimary} w-full`}>
@@ -133,7 +133,7 @@ export default function Login() {
         <form onSubmit={verify} className="space-y-4">
           <label className="block text-sm font-medium text-slate-700">
             Sign-in code
-            <input
+            <Input
               inputMode="numeric"
               autoComplete="one-time-code"
               autoFocus
@@ -143,8 +143,7 @@ export default function Login() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="123456"
-              className={`${inputCls} mt-1 text-center text-lg tracking-[0.4em] font-mono`}
-            />
+              className="mt-1 font-mono" />
           </label>
           {error && <ErrorBanner>{error}</ErrorBanner>}
           <button type="submit" disabled={busy || code.length !== 6} className={`${btnPrimary} w-full`}>
@@ -181,19 +180,18 @@ export default function Login() {
           </div>
           <label className="block text-sm font-medium text-slate-700">
             Your name <span className="text-slate-400 font-normal">(optional)</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className={`${inputCls} mt-1`} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className="mt-1" />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Message
-            <textarea
+            <Textarea
               required
               rows={4}
               maxLength={1000}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Which team are you on, and what do you need access for?"
-              className={`${inputCls} mt-1 resize-y`}
-            />
+              className="mt-1 resize-y" />
           </label>
           {error && <ErrorBanner>{error}</ErrorBanner>}
           <div className="flex gap-2">

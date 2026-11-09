@@ -54,13 +54,18 @@ test.describe('quick feedback (thumbs)', () => {
   test('thumbs up records a vote that survives a reload, and a second click removes it', async ({ page, request }) => {
     const who = { email: `e2e.thumbs${Date.now()}@ust.com`, role: 'ust_stakeholder' as const }
     const token = await signInAs(page, request, who)
-    const up = page.getByTitle('Good').first()
+    await gridReady(page)
+    // The first operational area's thumbs-up, in the grid (not a milestone's, whose grid can render first).
+    const up = page.locator('[data-tour="workstream-grid"] [row-id] [title="Good"]').first()
+    const id = await up.locator('xpath=ancestor::*[@row-id][1]').getAttribute('row-id')
     await up.click()
-    await expect.poll(async () => (await api(request, token, 'GET', '/quick-feedback')).json().then((v) => v.length ?? v.entries?.length)).toBeGreaterThan(0)
+    await expect(up).toHaveClass(/emerald-600/)
+    await expect.poll(async () => (await api(request, token, 'GET', `/quick-feedback/${id}`)).json().then((v) => v?.vote), { timeout: 10_000 }).toBe('up')
     await page.reload()
-    await expect(page.getByTitle('Good').first()).toHaveClass(/emerald-600/)
-    await page.getByTitle('Good').first().click()
-    await expect(page.getByTitle('Good').first()).not.toHaveClass(/emerald-600/)
+    await gridReady(page)
+    await expect(up).toHaveClass(/emerald-600/)
+    await up.click()
+    await expect(up).not.toHaveClass(/emerald-600/)
   })
 
   test('thumbs down: empty Submit is refused, Skip keeps the vote, a typed concern is saved', async ({ page, request }) => {

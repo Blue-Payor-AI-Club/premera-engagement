@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { Input, Select } from '../ui/input'
 import { Check, Pencil, Trash2, X } from 'lucide-react'
-import { Badge, ErrorBanner, Spinner, btnDanger, btnSecondary, inputCls } from '../ui'
+import { Badge, ErrorBanner, Spinner, btnDanger, btnSecondary } from '../ui'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
 import { adminApi, type AppUser } from '../../lib/adminApi'
@@ -25,16 +26,14 @@ function NameCell({ user, disabled, onSave }: { user: AppUser; disabled: boolean
   if (editing) {
     return (
       <form onSubmit={(e) => { e.preventDefault(); save() }} className="flex items-center gap-1.5">
-        <input
+        <Input
           autoFocus
           aria-label={`Name for ${user.email}`}
           value={draft}
           maxLength={120}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false) }}
-          placeholder="Full name"
-          className={`${inputCls} py-1`}
-        />
+          placeholder="Full name" />
         <button type="submit" aria-label="Save name" disabled={!draft.trim()} className={`${btnSecondary} px-2 py-1`}><Check size={14} /></button>
         <button type="button" aria-label="Cancel" onClick={() => setEditing(false)} className={`${btnSecondary} px-2 py-1`}><X size={14} /></button>
       </form>
@@ -136,16 +135,16 @@ export default function UsersTab() {
                     {isMe && <Badge tone="blue">You</Badge>}
                   </td>
                   <td className="px-4 py-2.5">
-                    <select
+                    <Select
                       aria-label={`Role for ${u.email}`}
                       value={u.role}
                       disabled={isMe || busy === u.email}
                       onChange={(e) => changeRole(u, e.target.value as Role)}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                      
                       title={isMe ? "You can't change your own role" : undefined}
                     >
                       {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                    </select>
+                    </Select>
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge tone={u.status === 'active' ? 'green' : 'red'}>{u.status === 'active' ? 'Active' : 'Disabled'}</Badge>

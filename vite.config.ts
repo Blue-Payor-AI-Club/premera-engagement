@@ -13,6 +13,8 @@ export default defineConfig({
     // MUI's ESM build does directory imports Node can't resolve; inlining lets Vite handle
     // them. Needed by any test that renders a page importing @mui (e.g. ProgramLevel).
     server: { deps: { inline: [/@mui/] } },
+    // AG Grid pages render slowly in jsdom when every test file runs in parallel.
+    testTimeout: 15_000,
     restoreMocks: true,
     clearMocks: true,
   },

@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { API, E2E_DIR } from '../playwright.config'
@@ -60,3 +60,15 @@ export async function loadPortal(request: APIRequestContext, data: unknown = DEM
 }
 
 export const demoData = () => structuredClone(DEMO)
+
+/**
+ * A row of an AG Grid (components/DataGrid.tsx), found by its text. Returns every part of the row:
+ * pinned columns (e.g. the Edit column) render in their own container with the same row-index.
+ */
+export async function gridRow(scope: Page | Locator, text: string | RegExp): Promise<Locator> {
+  const part = scope.locator('.ag-row', { hasText: text }).first()
+  await part.waitFor()
+  const index = await part.getAttribute('row-index')
+  const grid = part.locator('xpath=ancestor::div[contains(@class,"ag-root-wrapper")][1]')
+  return grid.locator(`.ag-row[row-index="${index}"]`)
+}

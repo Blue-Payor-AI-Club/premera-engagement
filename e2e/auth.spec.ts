@@ -23,7 +23,7 @@ test.describe('sign-in', () => {
     const real = await latestCode(who.email)
     await page.getByPlaceholder('123456').fill(real === '000000' ? '111111' : '000000')
     await page.getByRole('button', { name: 'Verify and sign in' }).click()
-    await expect(page.getByText(/incorrect|invalid|wrong|expired/i)).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: /incorrect|invalid|wrong|expired/i })).toBeVisible()
     await page.getByPlaceholder('123456').fill(real)
     await page.getByRole('button', { name: 'Verify and sign in' }).click()
     await expect(page).toHaveURL(/\/program/)

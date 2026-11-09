@@ -14,7 +14,7 @@ export default function UstViewNotice() {
       <Eye size={14} className="mt-0.5 shrink-0 text-slate-500" aria-hidden />
       <span>
         You&apos;re seeing everything. Premera stakeholders only see rows marked <strong>Visible to Premera</strong>; rows
-        tagged <strong>UST only</strong> are hidden from them. Set <em>Premera Attention</em> to Yes in the workbook to share a row.
+        tagged <strong>UST only</strong> are hidden from them. To share a row, tick <em>Premera Attention</em> when editing it (pencil) or set it to Yes in the workbook.
       </span>
     </div>
   )

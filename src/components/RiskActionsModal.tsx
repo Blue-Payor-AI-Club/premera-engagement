@@ -4,7 +4,7 @@ import { type IssueRow, type ActionStatus } from '../data/portalData'
 import StatusDot from './StatusDot'
 import { STATUS, type StatusKey } from '../data/status'
 import VisibleToPremera from './VisibleToPremera'
-import { AddButton, EditButton, useEditor } from './Editor'
+import { AddButton, EditButton, EditCell, EditHeader, useEditor } from './Editor'
 import { riskActionRequest } from '../lib/editRequests'
 
 // UST users edit actions here (pencil / Add); everyone else sees them read-only.
@@ -30,7 +30,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-[9997] flex items-center justify-center bg-black/50 px-4"
       onClick={onClose}
     >
       <div
@@ -105,6 +105,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                     <th className="text-left font-semibold px-3 py-2 w-32">Owner</th>
                     <th className="text-left font-semibold px-3 py-2 w-24">Due Date</th>
                     <th className="text-center font-semibold px-3 py-2 w-32">Status</th>
+                    <EditHeader />
                   </tr>
                 </thead>
                 <tbody>
@@ -114,7 +115,6 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                       <tr key={a.id} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
                         <td className="px-3 py-2.5 text-slate-700">
                           {a.action}<VisibleToPremera flagged={a.needsPremeraAttention} />
-                          <EditButton title="Edit action" request={() => riskActionRequest(issue.id, a)} />
                         </td>
                         <td className="px-3 py-2.5 font-medium" style={{ color: '#0067b1' }}>{a.owner}</td>
                         <td className="px-3 py-2.5 text-slate-600">{a.dueDate}</td>
@@ -126,6 +126,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                             {s.label}
                           </span>
                         </td>
+                        <EditCell title="Edit action" request={() => riskActionRequest(issue.id, a)} />
                       </tr>
                     )
                   })}
@@ -138,7 +139,10 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                   const s = ACTION_STATUS[a.actionStatus] ?? ACTION_STATUS.open
                   return (
                     <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-sm text-slate-700 mb-2">{a.action}<VisibleToPremera flagged={a.needsPremeraAttention} /><EditButton title="Edit action" request={() => riskActionRequest(issue.id, a)} /></p>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm text-slate-700">{a.action}<VisibleToPremera flagged={a.needsPremeraAttention} /></p>
+                        <EditButton title="Edit action" className="shrink-0" request={() => riskActionRequest(issue.id, a)} />
+                      </div>
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="text-xs">
                           <span className="font-semibold" style={{ color: '#0067b1' }}>{a.owner}</span>

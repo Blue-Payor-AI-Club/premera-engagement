@@ -4,7 +4,7 @@ import { milestoneRowRequest, milestoneSectionRequest } from '../lib/editRequest
 import StatusDot from './StatusDot'
 import QuickFeedback from './QuickFeedback'
 import VisibleToPremera from './VisibleToPremera'
-import { AddButton, EditButton, useEditor } from './Editor'
+import { AddButton, EditButton, EditCell, EditHeader, useEditor } from './Editor'
 
 interface Props {
   headLabel: string
@@ -36,11 +36,14 @@ export default function MilestoneTable({
   locate,
   where = 'milestones',
 }: Props) {
-  const columnCount = showFeedback ? 5 : 4
   const editable = !!useEditor() && !!locate
-  const editSection = (s: MilestoneSection) => editable && <EditButton title={`Edit section ${s.title}`} request={() => milestoneSectionRequest(locate!, where, s)} />
+  const columnCount = (showFeedback ? 5 : 4) + (editable ? 1 : 0)
+  const sectionReq = (s: MilestoneSection) => () => milestoneSectionRequest(locate!, where, s)
+  const rowReq = (s: MilestoneSection, r: MilestoneSection['rows'][number]) => () => milestoneRowRequest(locate!, s.id, r)
+  // Phone layout has no columns, so the pencil sits at the end of the line there.
+  const editSection = (s: MilestoneSection) => editable && <EditButton title={`Edit section ${s.title}`} request={sectionReq(s)} />
   const editRow = (s: MilestoneSection, r: MilestoneSection['rows'][number]) =>
-    editable && <EditButton title={`Edit milestone ${r.label}`} request={() => milestoneRowRequest(locate!, s.id, r)} />
+    editable && <EditButton title={`Edit milestone ${r.label}`} className="" request={rowReq(s, r)} />
   const addRow = (s: MilestoneSection) => editable && <AddButton request={() => milestoneRowRequest(locate!, s.id)}>Add milestone</AddButton>
   const addSection = editable && (
     <div className="px-3 py-2"><AddButton request={() => milestoneSectionRequest(locate!, where)}>Add milestone section</AddButton></div>
@@ -57,20 +60,22 @@ export default function MilestoneTable({
             <th className="text-left font-semibold px-3 py-2 w-24">Revised Date</th>
             <th className="text-center font-semibold px-3 py-2 w-14">{statusLabel}</th>
             {showFeedback && <th className="text-center font-semibold px-3 py-2 w-20">Feedback</th>}
+            {editable && <EditHeader />}
           </tr>
         </thead>
         <tbody>
           {sections.map((section) => (
             <Fragment key={section.id}>
               <tr style={{ background: sectionColor }}>
-                <td colSpan={columnCount} className="px-3 py-1.5 font-semibold text-[13px]" style={{ color: sectionTextColor }}>
-                  {section.title}{editSection(section)}
+                <td colSpan={columnCount - (editable ? 1 : 0)} className="px-3 py-1.5 font-semibold text-[13px]" style={{ color: sectionTextColor }}>
+                  {section.title}
                 </td>
+                {editable && <EditCell title={`Edit section ${section.title}`} request={sectionReq(section)} />}
               </tr>
               {section.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100">
                   <td className="px-3 py-1.5 text-slate-700 break-words">
-                    {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />{editRow(section, row)}
+                    {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />
                   </td>
                   <td className="px-3 py-1.5 text-slate-600">{row.due}</td>
                   <td className="px-3 py-1.5 text-slate-500">{row.revised || '—'}</td>
@@ -82,6 +87,7 @@ export default function MilestoneTable({
                       <QuickFeedback itemId={row.id} itemLabel={row.label} />
                     </td>
                   )}
+                  {editable && <EditCell title={`Edit milestone ${row.label}`} request={rowReq(section, row)} />}
                 </tr>
               ))}
               {editable && (
@@ -106,7 +112,7 @@ export default function MilestoneTable({
             {section.rows.map((row) => (
               <div key={row.id} className="flex items-start justify-between gap-3 px-3 py-2 border-b border-slate-100">
                 <div className="min-w-0">
-                  <div className="text-sm text-slate-700">{row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />{editRow(section, row)}</div>
+                  <div className="text-sm text-slate-700">{row.label}<VisibleToPremera flagged={row.needsPremeraAttention} /></div>
                   {(row.due || row.revised) && (
                     <div className="text-xs text-slate-500 mt-0.5">
                       {row.due && <>Due {row.due}</>}
@@ -117,6 +123,7 @@ export default function MilestoneTable({
                 <div className="flex items-center gap-1 shrink-0 pt-0.5">
                   <StatusDot status={row.status} />
                   {showFeedback && <QuickFeedback itemId={row.id} itemLabel={row.label} />}
+                  {editRow(section, row)}
                 </div>
               </div>
             ))}

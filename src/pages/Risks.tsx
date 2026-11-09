@@ -9,7 +9,7 @@ import { usePortalData } from '../context/PortalDataContext'
 import { type IssueRow, type SeverityLevel } from '../data/portalData'
 import { STATUS, type StatusKey } from '../data/status'
 import { csvDate, downloadCsv, yesNo } from '../lib/csv'
-import { AddButton, EditButton } from '../components/Editor'
+import { AddButton, EditButton, EditCell, EditHeader } from '../components/Editor'
 import { issueRequest, type Division } from '../lib/editRequests'
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
@@ -98,6 +98,7 @@ function IssueGroup({
             <th className="text-center font-semibold px-4 py-2 w-20">Priority</th>
             <th className="text-center font-semibold px-4 py-2 w-16">Status</th>
             <th className="text-center font-semibold px-4 py-2 w-24">Actions</th>
+            <EditHeader />
           </tr>
         </thead>
         <tbody>
@@ -110,7 +111,6 @@ function IssueGroup({
                   </span>
                 )}
                 {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
-                <EditButton title="Edit risk / issue" request={() => issueRequest(division, row)} />
               </td>
               <td className="px-4 py-3 align-top">
                 <ul className="space-y-1">
@@ -141,6 +141,7 @@ function IssueGroup({
                   Actions
                 </button>
               </td>
+              <EditCell className="align-top py-3" title="Edit risk / issue" request={() => issueRequest(division, row)} />
             </tr>
           ))}
         </tbody>
@@ -158,9 +159,9 @@ function IssueGroup({
                   </span>
                 )}
                 {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
-                <EditButton title="Edit risk / issue" request={() => issueRequest(division, row)} />
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <EditButton title="Edit risk / issue" className="" request={() => issueRequest(division, row)} />
                 <button
                   onClick={() => onSelect(row)}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 transition"

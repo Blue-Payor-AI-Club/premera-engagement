@@ -33,7 +33,7 @@ import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
 import { downloadCsv, yesNo } from '../lib/csv'
-import { AddButton, EditButton } from '../components/Editor'
+import { AddButton, EditButton, useEditor } from '../components/Editor'
 import {
   programHeaderRequest, programMilestones, transitionHeaderRequest, workstreamMilestones, workstreamRequest, type Division,
 } from '../lib/editRequests'
@@ -105,11 +105,22 @@ function useLiveWorkstream(division: Division, id: string | undefined): Workstre
   return useContext(PortalDataContext)?.data.program[division].workstreams.find((w) => w.id === id)
 }
 
-function OperationalAreaRenderer({ data, context }: ICellRendererParams) {
-  const { expandedIds, toggle } = useContext(ExpandContext)
-  const live = useLiveWorkstream((context as GridContext).division, (data as WorkstreamRow | undefined)?.id)
+function EditRenderer({ data, context }: ICellRendererParams) {
+  const division = (context as GridContext).division
+  const live = useLiveWorkstream(division, (data as WorkstreamRow | undefined)?.id)
   if (!data || isDetailRow(data)) return null
   const ws = live ?? (data as WorkstreamRow)
+  return (
+    <div className="flex items-center justify-center h-full w-full">
+      <EditButton title={`Edit ${ws.name}`} className="" request={() => workstreamRequest(division, ws)} />
+    </div>
+  )
+}
+
+function OperationalAreaRenderer({ data }: ICellRendererParams) {
+  const { expandedIds, toggle } = useContext(ExpandContext)
+  if (!data || isDetailRow(data)) return null
+  const ws = data as WorkstreamRow
   const expanded = expandedIds.has(ws.id)
   const Icon = ICONS[ws.icon] ?? Share2
   return (
@@ -130,7 +141,6 @@ function OperationalAreaRenderer({ data, context }: ICellRendererParams) {
       </span>
       <span className="font-semibold text-[#0067b1] text-sm leading-snug">
         {ws.name}<VisibleToPremera flagged={ws.needsPremeraAttention} />
-        <EditButton title={`Edit ${ws.name}`} request={() => workstreamRequest((context as GridContext).division, ws)} />
       </span>
     </div>
   )
@@ -334,6 +344,7 @@ export default function ProgramLevel() {
   // tab (which has its own content) is open, so switching back restores the same view.
   const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const canEdit = !!useEditor()
   const p = data.program[division]
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | StatusKey>('')
@@ -441,7 +452,16 @@ export default function ProgramLevel() {
       autoHeight: true,
       wrapText: true,
     },
-  ], [])
+    ...(canEdit ? [{
+      headerName: 'Edit',
+      colId: 'edit',
+      width: 70,
+      sortable: false,
+      resizable: false,
+      cellRenderer: EditRenderer,
+      headerClass: 'ag-center-aligned-header',
+    }] : []),
+  ], [canEdit])
 
   const defaultColDef = useMemo<ColDef>(() => ({ resizable: true }), [])
 

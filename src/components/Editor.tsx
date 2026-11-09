@@ -32,7 +32,7 @@ export function useEditor(): ((r: EditRequest) => void) | null {
   return canEdit ? open : null
 }
 
-export function EditButton({ request, title = 'Edit' }: { request: () => EditRequest; title?: string }) {
+export function EditButton({ request, title = 'Edit', className = 'ml-1.5' }: { request: () => EditRequest; title?: string; className?: string }) {
   const open = useEditor()
   if (!open) return null
   return (
@@ -41,11 +41,23 @@ export function EditButton({ request, title = 'Edit' }: { request: () => EditReq
       onClick={(e) => { e.stopPropagation(); open(request()) }}
       title={title}
       aria-label={title}
-      className="inline-flex items-center justify-center align-middle ml-1.5 p-1 rounded text-slate-400 hover:text-[#0067b1] hover:bg-slate-100 transition"
+      className={`inline-flex items-center justify-center align-middle p-1 rounded text-slate-400 hover:text-[#0067b1] hover:bg-slate-100 transition ${className}`}
     >
       <Pencil size={12} aria-hidden />
     </button>
   )
+}
+
+/** The "Edit" column header of a table — rendered for UST users only, like the cells below it. */
+export function EditHeader({ className = '', rowSpan }: { className?: string; rowSpan?: number }) {
+  if (!useEditor()) return null
+  return <th scope="col" rowSpan={rowSpan} className={`text-center font-semibold px-2 py-2 w-14 ${className}`}>Edit</th>
+}
+
+/** One row's cell in the "Edit" column. */
+export function EditCell({ request, title, className = '' }: { request: () => EditRequest; title?: string; className?: string }) {
+  if (!useEditor()) return null
+  return <td className={`px-2 py-1.5 text-center ${className}`}><EditButton request={request} title={title} className="" /></td>
 }
 
 export function AddButton({ request, children }: { request: () => EditRequest; children: ReactNode }) {
@@ -117,7 +129,7 @@ function EditDialog({ request, onClose }: { request: EditRequest; onClose: () =>
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 px-4"
       onClick={() => !busy && onClose()}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) onClose() } }}
     >

@@ -95,7 +95,7 @@ export default function Admin() {
             Data Sync · Excel
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Portal data is maintained in an Excel workbook. Sync it here to update the portal.
+            Use the workbook for bulk updates and sync it here. For a quick change to one row, use the pencil next to it on any page.
           </p>
         </div>
         {canEdit && (

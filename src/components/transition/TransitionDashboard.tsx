@@ -4,7 +4,7 @@ import type { DashboardRow, TransitionData } from '../../data/transitionData'
 import StatusDot from '../StatusDot'
 import StatusChip from './StatusChip'
 import VisibleToPremera from '../VisibleToPremera'
-import { AddButton, EditButton } from '../Editor'
+import { AddButton, EditButton, EditCell, EditHeader } from '../Editor'
 import { dashboardRowRequest, raidRequest, transitionHeaderRequest } from '../../lib/editRequests'
 
 // Header colours are taken from the source slide; body rows use a plain white/slate
@@ -52,6 +52,7 @@ function WorkstreamTable({ data }: { data: TransitionData }) {
             <th scope="colgroup" colSpan={5} className={`${th} ${GROUP_HEAD}`}>Discovery/Planning/Onboarding</th>
             <th scope="colgroup" colSpan={3} className={`${th} ${GROUP_HEAD}`}>Transition</th>
             <th scope="col" rowSpan={2} className={`${th} ${PLAIN_HEAD} w-[18%]`}>Notes</th>
+            <EditHeader rowSpan={2} className={`${th} ${PLAIN_HEAD}`} />
           </tr>
           <tr>
             <th scope="col" className={`${th} ${SUB_HEAD}`}>Status</th>
@@ -81,7 +82,7 @@ function WorkstreamTable({ data }: { data: TransitionData }) {
                       <div className="mt-1 font-normal"><AddButton request={() => dashboardRowRequest(data, g)}>Add row</AddButton></div>
                     </th>
                   )}
-                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /><EditButton request={() => dashboardRowRequest(data, g, i)} /></th>
+                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /></th>
                   <Status status={row.planning.status} />
                   <td className={td}>{row.planning.start}</td>
                   <td className={td}>{row.planning.sowSubmit}</td>
@@ -95,6 +96,7 @@ function WorkstreamTable({ data }: { data: TransitionData }) {
                       <Notes row={row} />
                     </td>
                   )}
+                  <EditCell className={td} title={`Edit ${row.workstream}`} request={() => dashboardRowRequest(data, g, i)} />
                 </tr>
               )
             })
@@ -117,6 +119,7 @@ function RaidTable({ data }: { data: TransitionData }) {
             {['RAID', 'Description', 'Mitigation Plan/Next Steps', 'Owner', 'Due Date', 'Status'].map((h) => (
               <th key={h} scope="col" className={`${th} ${RAID_HEAD} text-sm py-2.5`}>{h}</th>
             ))}
+            <EditHeader className={`${th} ${RAID_HEAD} text-sm py-2.5`} />
           </tr>
         </thead>
         <tbody>
@@ -125,7 +128,6 @@ function RaidTable({ data }: { data: TransitionData }) {
               <td className={`${td} text-center font-semibold`}>{r.type}</td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.description}<VisibleToPremera flagged={r.needsPremeraAttention} />
-                <EditButton request={() => raidRequest(data, i)} />
               </td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.mitigation.length > 1 ? (
@@ -137,6 +139,7 @@ function RaidTable({ data }: { data: TransitionData }) {
               <td className={`${td} text-center text-[12px]`}>{r.owner}</td>
               <td className={`${td} text-center text-[12px]`}>{r.dueDate}</td>
               <td className={`${td} text-center text-[12px]`}>{r.status}</td>
+              <EditCell className={td} title="Edit RAID item" request={() => raidRequest(data, i)} />
             </tr>
           ))}
         </tbody>

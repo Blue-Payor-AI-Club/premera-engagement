@@ -27,6 +27,7 @@ function renderPanel(refresh = vi.fn()) {
         refresh,
         replaceDocument: vi.fn(),
         reset: vi.fn(),
+        edit: vi.fn(),
       }}
     >
       <ExcelSyncPanel />

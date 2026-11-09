@@ -9,6 +9,8 @@ import { usePortalData } from '../context/PortalDataContext'
 import { type IssueRow, type SeverityLevel } from '../data/portalData'
 import { STATUS, type StatusKey } from '../data/status'
 import { csvDate, downloadCsv, yesNo } from '../lib/csv'
+import { AddButton, EditButton } from '../components/Editor'
+import { issueRequest, type Division } from '../lib/editRequests'
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 
@@ -58,12 +60,14 @@ function exportIssues(rows: { division: string; issue: IssueRow }[]) {
 
 function IssueGroup({
   title,
+  division,
   rows,
   onSelect,
   showAll,
   premeraOnly,
 }: {
   title: string
+  division: Division
   rows: IssueRow[]
   onSelect: (r: IssueRow) => void
   showAll: boolean
@@ -106,6 +110,7 @@ function IssueGroup({
                   </span>
                 )}
                 {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
+                <EditButton title="Edit risk / issue" request={() => issueRequest(division, row)} />
               </td>
               <td className="px-4 py-3 align-top">
                 <ul className="space-y-1">
@@ -153,6 +158,7 @@ function IssueGroup({
                   </span>
                 )}
                 {row.issue}<VisibleToPremera flagged={row.needsPremeraAttention} />
+                <EditButton title="Edit risk / issue" request={() => issueRequest(division, row)} />
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
@@ -319,6 +325,7 @@ export default function Risks() {
             <option key={k} value={k}>{SEVERITY_STYLE[k].label}</option>
           ))}
         </select>
+        <AddButton request={() => issueRequest(division === 'bpo' ? 'bpo' : 'ito')}>Add risk / issue</AddButton>
         <button
           onClick={() => exportIssues([
             ...ito.filter(shown).map((issue) => ({ division: 'ITO', issue })),
@@ -338,6 +345,7 @@ export default function Risks() {
       <div className="space-y-6">
         <IssueGroup
           title="Program Level — ITO"
+          division="ito"
           rows={ito}
           onSelect={(r) => setSelectedId(r.id)}
           showAll={showAll}
@@ -345,6 +353,7 @@ export default function Risks() {
         />
         <IssueGroup
           title="Program Level — BPO"
+          division="bpo"
           rows={bpo}
           onSelect={(r) => setSelectedId(r.id)}
           showAll={showAll}

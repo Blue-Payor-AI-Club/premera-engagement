@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_PORTAL_DATA, type PortalData, type ProgramTab } from '../data/portalData'
-import { apiFetch } from '../lib/api'
+import { ApiError, apiFetch } from '../lib/api'
 import { useAuth } from './AuthContext'
 
 // Bumped from _v6: the document shape gained statusMessage/needsPremeraAttention/
@@ -25,6 +25,9 @@ interface Ctx {
    */
   replaceDocument: (next: PortalData) => void
   reset: () => void
+  /** In-app edit (UST only): applies `mutate` to a copy of the version on screen and saves it.
+   * Rejects with a readable message; on a version clash it also reloads the latest data. */
+  edit: (summary: string, mutate: (draft: PortalData) => void) => Promise<void>
 }
 
 const PortalDataContext = createContext<Ctx | null>(null)
@@ -128,9 +131,34 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
       })
   }, [])
 
+  const edit = useCallback(async (summary: string, mutate: (draft: PortalData) => void) => {
+    // Without the server's ETag the screen may be a cached copy; saving it could overwrite newer data.
+    if (!etag) throw new Error('The latest data has not loaded yet. Press Refresh and try again.')
+    const draft = structuredClone(data)
+    mutate(draft)
+    try {
+      const res = await apiFetch('/portal/edit', {
+        method: 'PUT',
+        headers: { 'If-Match': etag },
+        body: JSON.stringify({ data: draft, summary }),
+      })
+      const et = res.headers.get('ETag')
+      if (et) setEtag(et)
+      const json = await res.json() as PortalData
+      setData(json)
+      persist(json)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        fetchDocument()
+        throw new Error('Someone else saved a change a moment ago. The latest data is now loaded; please make your change again.', { cause: err })
+      }
+      throw err
+    }
+  }, [data, etag, fetchDocument])
+
   const value = useMemo(
-    () => ({ data, loading, error, refresh: fetchDocument, replaceDocument, reset }),
-    [data, loading, error, fetchDocument, replaceDocument, reset],
+    () => ({ data, loading, error, refresh: fetchDocument, replaceDocument, reset, edit }),
+    [data, loading, error, fetchDocument, replaceDocument, reset, edit],
   )
   return <PortalDataContext.Provider value={value}>{children}</PortalDataContext.Provider>
 }

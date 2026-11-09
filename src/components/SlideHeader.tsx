@@ -1,14 +1,18 @@
 import { useContext } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { PortalDataContext } from '../context/PortalDataContext'
+import { EditButton } from './Editor'
+import type { EditRequest } from '../lib/editRequests'
 
 interface Props {
   title: string
   sampleLines: string[]
   asOf?: string
+  /** UST only: what the pencil next to the As-Of date edits. */
+  edit?: () => EditRequest
 }
 
-export default function SlideHeader({ title, sampleLines, asOf = 'DD/MM/YYYY' }: Props) {
+export default function SlideHeader({ title, sampleLines, asOf = 'DD/MM/YYYY', edit }: Props) {
   // Read directly so the header still renders outside a PortalDataProvider (isolated tests).
   const portal = useContext(PortalDataContext)
   return (
@@ -35,7 +39,9 @@ export default function SlideHeader({ title, sampleLines, asOf = 'DD/MM/YYYY' }:
         )}
         <div className="rounded-full bg-slate-100 px-4 sm:px-6 py-2 sm:py-3 text-right leading-tight shrink-0">
           <div className="text-[10px] tracking-widest text-slate-500 font-semibold">AS OF:</div>
-          <div className="text-sm font-semibold text-slate-700">{asOf}</div>
+          <div className="text-sm font-semibold text-slate-700">
+            {asOf}{edit && <EditButton request={edit} title="Edit report header" />}
+          </div>
         </div>
       </div>
     </header>

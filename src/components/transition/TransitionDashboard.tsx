@@ -4,6 +4,8 @@ import type { DashboardRow, TransitionData } from '../../data/transitionData'
 import StatusDot from '../StatusDot'
 import StatusChip from './StatusChip'
 import VisibleToPremera from '../VisibleToPremera'
+import { AddButton, EditButton } from '../Editor'
+import { dashboardRowRequest, raidRequest, transitionHeaderRequest } from '../../lib/editRequests'
 
 // Header colours are taken from the source slide; body rows use a plain white/slate
 // zebra instead of the slide's per-tower fills, which read as noise on screen.
@@ -36,7 +38,8 @@ function Notes({ row }: { row: DashboardRow }): ReactNode {
   )
 }
 
-function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
+function WorkstreamTable({ data }: { data: TransitionData }) {
+  const groups = data.dashboard
   let stripe = 0 // zebra index across the whole table, not per tower
   return (
     <div className="overflow-x-auto">
@@ -75,9 +78,10 @@ function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
                   {i === 0 && (
                     <th scope="rowgroup" rowSpan={group.rows.length} className={`${td} bg-white text-left font-bold text-[#10285c]`}>
                       {group.tower}
+                      <div className="mt-1 font-normal"><AddButton request={() => dashboardRowRequest(data, g)}>Add row</AddButton></div>
                     </th>
                   )}
-                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /></th>
+                  <th scope="row" className={`${td} text-left font-bold text-[#10285c]`}>{row.workstream}<VisibleToPremera flagged={row.needsPremeraAttention} /><EditButton request={() => dashboardRowRequest(data, g, i)} /></th>
                   <Status status={row.planning.status} />
                   <td className={td}>{row.planning.start}</td>
                   <td className={td}>{row.planning.sowSubmit}</td>
@@ -97,11 +101,13 @@ function WorkstreamTable({ groups }: { groups: TransitionData['dashboard'] }) {
           })}
         </tbody>
       </table>
+      <div className="p-2"><AddButton request={() => dashboardRowRequest(data)}>Add tower / workstream</AddButton></div>
     </div>
   )
 }
 
-function RaidTable({ items }: { items: TransitionData['raid'] }) {
+function RaidTable({ data }: { data: TransitionData }) {
+  const items = data.raid
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[860px] border-collapse">
@@ -119,6 +125,7 @@ function RaidTable({ items }: { items: TransitionData['raid'] }) {
               <td className={`${td} text-center font-semibold`}>{r.type}</td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.description}<VisibleToPremera flagged={r.needsPremeraAttention} />
+                <EditButton request={() => raidRequest(data, i)} />
               </td>
               <td className={`${td} text-[12px] align-top`}>
                 {r.mitigation.length > 1 ? (
@@ -134,6 +141,7 @@ function RaidTable({ items }: { items: TransitionData['raid'] }) {
           ))}
         </tbody>
       </table>
+      <div className="p-2"><AddButton request={() => raidRequest(data)}>Add RAID item</AddButton></div>
     </div>
   )
 }
@@ -149,14 +157,17 @@ export default function TransitionDashboard({ data }: { data: TransitionData }) 
             <span className="block text-sm font-semibold">{data.asOf}</span>
           </span>
           <StatusChip status={data.overallStatus} />
+          <span className="[&_button]:text-white/80 [&_button:hover]:text-[#0b3a53]">
+            <EditButton title="Edit transition header" request={() => transitionHeaderRequest(data)} />
+          </span>
         </div>
       </div>
 
       <div className="card overflow-hidden">
-        <WorkstreamTable groups={data.dashboard} />
+        <WorkstreamTable data={data} />
       </div>
       <div className="card overflow-hidden">
-        <RaidTable items={data.raid} />
+        <RaidTable data={data} />
       </div>
     </section>
   )

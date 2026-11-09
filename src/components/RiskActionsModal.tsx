@@ -4,10 +4,10 @@ import { type IssueRow, type ActionStatus } from '../data/portalData'
 import StatusDot from './StatusDot'
 import { STATUS, type StatusKey } from '../data/status'
 import VisibleToPremera from './VisibleToPremera'
+import { AddButton, EditButton, useEditor } from './Editor'
+import { riskActionRequest } from '../lib/editRequests'
 
-// Read-only now that Excel is the sole source of truth for portal data — action
-// status comes from the RiskActions sheet's Action Status column like everything
-// else. `next`/`hint` (used by the old click-to-cycle interaction) are gone.
+// UST users edit actions here (pencil / Add); everyone else sees them read-only.
 const ACTION_STATUS: Record<ActionStatus, { label: string; color: string }> = {
   open:       { label: 'Open',        color: '#e0392b' },
   inProgress: { label: 'In Progress', color: '#f2b705' },
@@ -15,9 +15,11 @@ const ACTION_STATUS: Record<ActionStatus, { label: string; color: string }> = {
 }
 
 export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow | null; onClose: () => void }) {
+  const canEdit = !!useEditor()
   useEffect(() => {
     if (!issue) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    // defaultPrevented: Esc closed the edit form on top of this modal, not this modal.
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [issue, onClose])
@@ -86,9 +88,9 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Actions &amp; Ownership</div>
-            {actions.length > 0 && (
-              <div className="text-[10px] text-slate-400">Read-only — maintained in the source workbook</div>
-            )}
+            {canEdit
+              ? <AddButton request={() => riskActionRequest(issue.id)}>Add action</AddButton>
+              : actions.length > 0 && <div className="text-[10px] text-slate-400">Read-only</div>}
           </div>
 
           {actions.length === 0 ? (
@@ -112,6 +114,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                       <tr key={a.id} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
                         <td className="px-3 py-2.5 text-slate-700">
                           {a.action}<VisibleToPremera flagged={a.needsPremeraAttention} />
+                          <EditButton title="Edit action" request={() => riskActionRequest(issue.id, a)} />
                         </td>
                         <td className="px-3 py-2.5 font-medium" style={{ color: '#0067b1' }}>{a.owner}</td>
                         <td className="px-3 py-2.5 text-slate-600">{a.dueDate}</td>
@@ -135,7 +138,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                   const s = ACTION_STATUS[a.actionStatus] ?? ACTION_STATUS.open
                   return (
                     <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-sm text-slate-700 mb-2">{a.action}<VisibleToPremera flagged={a.needsPremeraAttention} /></p>
+                      <p className="text-sm text-slate-700 mb-2">{a.action}<VisibleToPremera flagged={a.needsPremeraAttention} /><EditButton title="Edit action" request={() => riskActionRequest(issue.id, a)} /></p>
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="text-xs">
                           <span className="font-semibold" style={{ color: '#0067b1' }}>{a.owner}</span>

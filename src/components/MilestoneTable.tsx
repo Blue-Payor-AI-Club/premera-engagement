@@ -1,8 +1,10 @@
 import { Fragment } from 'react'
-import { type MilestoneSection } from '../data/portalData'
+import { type MilestoneSection, type PortalData } from '../data/portalData'
+import { milestoneRowRequest, milestoneSectionRequest } from '../lib/editRequests'
 import StatusDot from './StatusDot'
 import QuickFeedback from './QuickFeedback'
 import VisibleToPremera from './VisibleToPremera'
+import { AddButton, EditButton, useEditor } from './Editor'
 
 interface Props {
   headLabel: string
@@ -16,6 +18,10 @@ interface Props {
    * which renders the whole document at once and shouldn't fire a vote-fetch per row
    * or let an admin cast votes from a read-only preview. */
   showFeedback?: boolean
+  /** Makes the table editable for UST: finds these same sections in a copy of the document. */
+  locate?: (d: PortalData) => MilestoneSection[]
+  /** Where these milestones live, for the Activity log (e.g. "ITO program"). */
+  where?: string
 }
 
 export default function MilestoneTable({
@@ -27,8 +33,18 @@ export default function MilestoneTable({
   sectionColor = '#eceadb',
   sectionTextColor = '#334155',
   showFeedback = true,
+  locate,
+  where = 'milestones',
 }: Props) {
   const columnCount = showFeedback ? 5 : 4
+  const editable = !!useEditor() && !!locate
+  const editSection = (s: MilestoneSection) => editable && <EditButton title={`Edit section ${s.title}`} request={() => milestoneSectionRequest(locate!, where, s)} />
+  const editRow = (s: MilestoneSection, r: MilestoneSection['rows'][number]) =>
+    editable && <EditButton title={`Edit milestone ${r.label}`} request={() => milestoneRowRequest(locate!, s.id, r)} />
+  const addRow = (s: MilestoneSection) => editable && <AddButton request={() => milestoneRowRequest(locate!, s.id)}>Add milestone</AddButton>
+  const addSection = editable && (
+    <div className="px-3 py-2"><AddButton request={() => milestoneSectionRequest(locate!, where)}>Add milestone section</AddButton></div>
+  )
 
   return (
     <div>
@@ -48,13 +64,13 @@ export default function MilestoneTable({
             <Fragment key={section.id}>
               <tr style={{ background: sectionColor }}>
                 <td colSpan={columnCount} className="px-3 py-1.5 font-semibold text-[13px]" style={{ color: sectionTextColor }}>
-                  {section.title}
+                  {section.title}{editSection(section)}
                 </td>
               </tr>
               {section.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100">
                   <td className="px-3 py-1.5 text-slate-700 break-words">
-                    {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />
+                    {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />{editRow(section, row)}
                   </td>
                   <td className="px-3 py-1.5 text-slate-600">{row.due}</td>
                   <td className="px-3 py-1.5 text-slate-500">{row.revised || '—'}</td>
@@ -68,10 +84,14 @@ export default function MilestoneTable({
                   )}
                 </tr>
               ))}
+              {editable && (
+                <tr><td colSpan={columnCount} className="px-3 py-1.5">{addRow(section)}</td></tr>
+              )}
             </Fragment>
           ))}
         </tbody>
       </table>
+      <div className="hidden sm:block">{addSection}</div>
 
       {/* ---- Mobile stacked list ---- */}
       <div className="sm:hidden">
@@ -81,12 +101,12 @@ export default function MilestoneTable({
         {sections.map((section) => (
           <div key={section.id}>
             <div style={{ background: sectionColor, color: sectionTextColor }} className="px-3 py-1.5 font-semibold text-[13px]">
-              {section.title}
+              {section.title}{editSection(section)}
             </div>
             {section.rows.map((row) => (
               <div key={row.id} className="flex items-start justify-between gap-3 px-3 py-2 border-b border-slate-100">
                 <div className="min-w-0">
-                  <div className="text-sm text-slate-700">{row.label}<VisibleToPremera flagged={row.needsPremeraAttention} /></div>
+                  <div className="text-sm text-slate-700">{row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />{editRow(section, row)}</div>
                   {(row.due || row.revised) && (
                     <div className="text-xs text-slate-500 mt-0.5">
                       {row.due && <>Due {row.due}</>}
@@ -100,8 +120,10 @@ export default function MilestoneTable({
                 </div>
               </div>
             ))}
+            {editable && <div className="px-3 py-1.5">{addRow(section)}</div>}
           </div>
         ))}
+        {addSection}
       </div>
     </div>
   )

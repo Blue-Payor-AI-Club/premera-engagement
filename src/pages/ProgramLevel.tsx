@@ -28,11 +28,15 @@ import { TRANSITION_DATA } from '../data/transitionData'
 import StatusDot from '../components/StatusDot'
 import QuickFeedback from '../components/QuickFeedback'
 import VisibleToPremera from '../components/VisibleToPremera'
-import { usePortalData } from '../context/PortalDataContext'
+import { PortalDataContext, usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
 import { downloadCsv, yesNo } from '../lib/csv'
+import { AddButton, EditButton } from '../components/Editor'
+import {
+  programHeaderRequest, programMilestones, transitionHeaderRequest, workstreamMilestones, workstreamRequest, type Division,
+} from '../lib/editRequests'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
@@ -49,6 +53,9 @@ interface DetailRow {
 }
 
 type GridRow = WorkstreamRow | DetailRow
+
+/** Passed to the grid's cell renderers through AG-Grid's context prop. */
+interface GridContext { navigate: (to: string) => void; division: Division }
 
 const isDetailRow = (row: unknown): row is DetailRow =>
   !!row && typeof row === 'object' && '_rowType' in row && (row as DetailRow)._rowType === 'detail'
@@ -92,10 +99,17 @@ const portalTheme = themeQuartz.withParams({
 
 // ─── Cell renderers ───────────────────────────────────────────────────────────
 
-function OperationalAreaRenderer({ data }: ICellRendererParams) {
+/** AG-Grid can keep handing a cell its old copy of a row after a save; the live document is
+ * read from context instead, so an edit form never starts from (and saves back) stale values. */
+function useLiveWorkstream(division: Division, id: string | undefined): Workstream | undefined {
+  return useContext(PortalDataContext)?.data.program[division].workstreams.find((w) => w.id === id)
+}
+
+function OperationalAreaRenderer({ data, context }: ICellRendererParams) {
   const { expandedIds, toggle } = useContext(ExpandContext)
+  const live = useLiveWorkstream((context as GridContext).division, (data as WorkstreamRow | undefined)?.id)
   if (!data || isDetailRow(data)) return null
-  const ws = data as WorkstreamRow
+  const ws = live ?? (data as WorkstreamRow)
   const expanded = expandedIds.has(ws.id)
   const Icon = ICONS[ws.icon] ?? Share2
   return (
@@ -116,6 +130,7 @@ function OperationalAreaRenderer({ data }: ICellRendererParams) {
       </span>
       <span className="font-semibold text-[#0067b1] text-sm leading-snug">
         {ws.name}<VisibleToPremera flagged={ws.needsPremeraAttention} />
+        <EditButton title={`Edit ${ws.name}`} request={() => workstreamRequest((context as GridContext).division, ws)} />
       </span>
     </div>
   )
@@ -180,8 +195,10 @@ function BulletsRenderer({ value }: ICellRendererParams) {
   )
 }
 
-function MilestoneDetailRenderer({ data, node, api }: ICellRendererParams) {
+function MilestoneDetailRenderer({ data, node, api, context }: ICellRendererParams) {
+  const division = (context as GridContext).division
   const row = data as DetailRow
+  const live = useLiveWorkstream(division, row?._parentId)
   const ref = useRef<HTMLDivElement>(null)
   // Long milestone text wraps, so size the full-width row to its real content
   // instead of the per-row estimate in getRowHeight.
@@ -209,7 +226,9 @@ function MilestoneDetailRenderer({ data, node, api }: ICellRendererParams) {
       <MilestoneTable
         headLabel="Key Milestones"
         statusLabel="Status"
-        sections={row.milestones}
+        sections={live?.milestones ?? row.milestones}
+        locate={workstreamMilestones(division, row._parentId)}
+        where={`${division.toUpperCase()} / ${row.name}`}
         headColor="#dfe3e6"
         headTextColor="#374151"
         sectionColor="#f1f5f9"
@@ -449,6 +468,7 @@ export default function ProgramLevel() {
         title={isTransition ? 'Transition Program' : `${p.levelLabel} Highlights`}
         sampleLines={isTransition ? [] : ['Program Level Status Reporting Sample']}
         asOf={isTransition ? transition.asOf : data.asOf}
+        edit={() => (isTransition ? transitionHeaderRequest(transition) : programHeaderRequest(data, division))}
       />
 
       {/* Scorecard and risks summarise the selected ITO/BPO division — not applicable to Transition. */}
@@ -504,6 +524,7 @@ export default function ProgramLevel() {
             <option value="">Any status</option>
             {LEGEND_ORDER.map((k) => <option key={k} value={k}>{STATUS[k].label}</option>)}
           </select>
+          <AddButton request={() => workstreamRequest(division)}>Add operational area</AddButton>
           <button
             onClick={() => downloadCsv(`${division}-program-${new Date().toISOString().slice(0, 10)}.csv`, [
               ['Operational Area', 'Status', 'Status Note', 'Premera Attention', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
@@ -546,7 +567,7 @@ export default function ProgramLevel() {
               isFullWidthRow={isFullWidthRow}
               fullWidthCellRenderer={MilestoneDetailRenderer}
               getRowHeight={getRowHeight}
-              context={{ navigate }}
+              context={{ navigate, division } satisfies GridContext}
             />
           </ExpandContext.Provider>
         </div>
@@ -593,7 +614,8 @@ export default function ProgramLevel() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                   <VisibleToPremera flagged={w.needsPremeraAttention} />
+                    <VisibleToPremera flagged={w.needsPremeraAttention} />
+                    <EditButton title={`Edit ${w.name}`} request={() => workstreamRequest(division, w)} />
                     {w.premeraActionRequired && (
                       <button
                         onClick={() => navigate('/risks')}
@@ -621,6 +643,8 @@ export default function ProgramLevel() {
                   headLabel="Key Milestones"
                   statusLabel="Status"
                   sections={w.milestones ?? []}
+                  locate={workstreamMilestones(division, w.id)}
+                  where={`${division.toUpperCase()} / ${w.name}`}
                 />
               </AccordionDetails>
             </Accordion>
@@ -628,7 +652,7 @@ export default function ProgramLevel() {
         </div>
 
         <div className="card overflow-hidden">
-          <MilestoneTable headLabel="Key Milestones" statusLabel="Status" sections={p.milestones} />
+          <MilestoneTable headLabel="Key Milestones" statusLabel="Status" sections={p.milestones} locate={programMilestones(division)} where={`${division.toUpperCase()} program`} />
         </div>
 
       </div>

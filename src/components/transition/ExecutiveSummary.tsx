@@ -1,31 +1,50 @@
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { TransitionData } from '../../data/transitionData'
 import StatusChip from './StatusChip'
 import VisibleToPremera from '../VisibleToPremera'
+import { AddButton, EditButton } from '../Editor'
+import { contactRequest, priorityRequest, summaryLineRequest, transitionHeaderRequest } from '../../lib/editRequests'
 
-function SectionHeading({ children }: { children: string }) {
-  return <h3 className="text-sm font-bold uppercase tracking-wide text-[#0b2a4a] mb-2">{children}</h3>
+function SectionHeading({ children, edit }: { children: string; edit?: ReactNode }) {
+  return <h3 className="text-sm font-bold uppercase tracking-wide text-[#0b2a4a] mb-2">{children}{edit}</h3>
 }
 
-function BulletList({ items, marked }: { items: string[]; marked?: string[] }) {
+type SummaryList = 'accomplishments' | 'risks' | 'executiveFocus'
+
+function BulletList({ data, list }: { data: TransitionData; list: SummaryList }) {
+  const { summary } = data
   return (
-    <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
-      {items.map((t, i) => <li key={i}>{t}<VisibleToPremera flagged={marked?.includes(t)} /></li>)}
-    </ul>
+    <>
+      <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 leading-relaxed marker:text-[#0067b1]">
+        {summary[list].map((t, i) => (
+          <li key={i}>
+            {t}<VisibleToPremera flagged={summary.premeraVisible?.includes(t)} />
+            <EditButton request={() => summaryLineRequest(data, list, i)} />
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1.5"><AddButton request={() => summaryLineRequest(data, list)}>Add line</AddButton></div>
+    </>
   )
 }
 
-function Contacts({ title, people }: { title: string; people: TransitionData['premeraContacts'] }) {
+function Contacts({ title, group, people }: { title: string; group: 'premeraContacts' | 'ustContacts'; people: TransitionData['premeraContacts'] }) {
   return (
-    <dl aria-label={title} className="space-y-1">
-      {people.map((p, i) => (
-        <div key={i} className="flex flex-wrap gap-x-2 text-[13px]">
-          <dt className="font-bold text-slate-800">{p.role}:</dt>
-          <dd className="text-slate-600">{p.name}<VisibleToPremera flagged={p.needsPremeraAttention} /></dd>
-        </div>
-      ))}
-    </dl>
+    <div>
+      <dl aria-label={title} className="space-y-1">
+        {people.map((p, i) => (
+          <div key={i} className="flex flex-wrap gap-x-2 text-[13px]">
+            <dt className="font-bold text-slate-800">{p.role}:</dt>
+            <dd className="text-slate-600">
+              {p.name}<VisibleToPremera flagged={p.needsPremeraAttention} />
+              <EditButton title={`Edit ${p.role}`} request={() => contactRequest(group, i, p)} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-1.5"><AddButton request={() => contactRequest(group)}>Add {group === 'premeraContacts' ? 'Premera' : 'UST'} contact</AddButton></div>
+    </div>
   )
 }
 
@@ -53,18 +72,18 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
 
       <div id={panelId} role="region" hidden={!open} className="px-4 sm:px-6 py-5 space-y-6">
         <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
-          <Contacts title="Premera contacts" people={data.premeraContacts} />
-          <Contacts title="UST contacts" people={data.ustContacts} />
+          <Contacts title="Premera contacts" group="premeraContacts" people={data.premeraContacts} />
+          <Contacts title="UST contacts" group="ustContacts" people={data.ustContacts} />
         </div>
 
         <div>
-          <SectionHeading>Overall Status</SectionHeading>
+          <SectionHeading edit={<EditButton title="Edit overall status" request={() => transitionHeaderRequest(data)} />}>Overall Status</SectionHeading>
           <p className="text-sm text-slate-700 leading-relaxed">{summary.overallStatus}</p>
         </div>
 
         <div>
           <SectionHeading>Key Accomplishments</SectionHeading>
-          <BulletList items={summary.accomplishments} marked={summary.premeraVisible} />
+          <BulletList data={data} list="accomplishments" />
         </div>
 
         <div>
@@ -73,19 +92,21 @@ export default function ExecutiveSummary({ data }: { data: TransitionData }) {
             {summary.priorities.map((p, i) => (
               <li key={i}>
                 <strong className="font-bold text-slate-900">{p.title}</strong> {p.text}<VisibleToPremera flagged={p.needsPremeraAttention} />
+                <EditButton request={() => priorityRequest(data, i)} />
               </li>
             ))}
           </ul>
+          <div className="mt-1.5"><AddButton request={() => priorityRequest(data)}>Add priority</AddButton></div>
         </div>
 
         <div>
           <SectionHeading>Key Risk</SectionHeading>
-          <BulletList items={summary.risks} marked={summary.premeraVisible} />
+          <BulletList data={data} list="risks" />
         </div>
 
         <div>
           <SectionHeading>Executive Focus Required</SectionHeading>
-          <BulletList items={summary.executiveFocus} marked={summary.premeraVisible} />
+          <BulletList data={data} list="executiveFocus" />
         </div>
       </div>
     </section>

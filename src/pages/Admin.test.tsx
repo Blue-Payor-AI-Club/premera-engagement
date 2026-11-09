@@ -22,6 +22,7 @@ function renderAdmin(data: PortalData = DEFAULT_PORTAL_DATA) {
         refresh: vi.fn(),
         replaceDocument: vi.fn(),
         reset: vi.fn(),
+        edit: vi.fn(),
       }}
     >
       <Admin />

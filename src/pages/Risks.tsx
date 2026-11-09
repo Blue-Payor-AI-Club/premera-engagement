@@ -8,7 +8,7 @@ import RiskActionsModal from '../components/RiskActionsModal'
 import { usePortalData } from '../context/PortalDataContext'
 import { type IssueRow, type SeverityLevel } from '../data/portalData'
 import { STATUS, type StatusKey } from '../data/status'
-import { downloadCsv } from '../lib/csv'
+import { csvDate, downloadCsv, yesNo } from '../lib/csv'
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 
@@ -38,17 +38,18 @@ const ACTION_STATUS_LABEL: Record<string, string> = { open: 'Open', inProgress: 
 
 function exportIssues(rows: { division: string; issue: IssueRow }[]) {
   downloadCsv(`risks-and-issues-${new Date().toISOString().slice(0, 10)}.csv`, [
-    ['Division', 'Risk / Issue', 'Mitigation Plan', 'Due', 'Status', 'Severity', 'Priority', 'Premera Action Required', 'Actions'],
+    ['Division', 'Risk / Issue', 'Mitigation Plan', 'Due', 'Status', 'Severity', 'Priority', 'Premera Attention', 'Premera Action Required', 'Actions'],
     ...rows.map(({ division, issue: r }) => [
       division,
       r.issue,
       r.mitigations.join('\n'),
-      r.date,
+      csvDate(r.date),
       STATUS[r.status as StatusKey]?.label ?? r.status,
       r.severity ? SEVERITY_STYLE[r.severity].label : '',
       r.priority ? SEVERITY_STYLE[r.priority].label : '',
-      r.premeraActionRequired ? 'Yes' : 'No',
-      (r.riskActions ?? []).map((a) => `${a.action} (${a.owner || 'no owner'}, ${ACTION_STATUS_LABEL[a.actionStatus] ?? a.actionStatus})`).join('\n'),
+      yesNo(r.needsPremeraAttention),
+      yesNo(r.premeraActionRequired),
+      (r.riskActions ?? []).map((a) => `${a.action} (${[a.owner || 'no owner', csvDate(a.dueDate), ACTION_STATUS_LABEL[a.actionStatus] ?? a.actionStatus].filter(Boolean).join(', ')})`).join('\n'),
     ]),
   ])
 }
@@ -230,8 +231,8 @@ export default function Risks() {
   const bpo = division === 'ito' ? [] : data.program.bpo.issues.filter(matches)
   const shown = (r: IssueRow) => (showAll || isAtRisk(r.status)) && (!premeraOnly || r.premeraActionRequired)
 
-  // Counted from the same rows the status filter lists, so the pills match the tables.
-  const listed = [...ito, ...bpo].filter((r) => showAll || isAtRisk(r.status))
+  // Counted from the same rows the filters list (status + Premera), so the pills match the tables.
+  const listed = [...ito, ...bpo].filter(shown)
   const totalAtRisk = listed.length
   const totalPremera = listed.filter((r) => r.premeraActionRequired).length
 
@@ -284,7 +285,7 @@ export default function Risks() {
               : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
           }`}
         >
-          {showAll ? 'Showing All Statuses' : 'Include Resolved / On Track'}
+          {showAll ? 'Showing All Statuses' : 'Show All Statuses'}
         </button>
         <label className="relative w-full sm:w-56 sm:ml-2">
           <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />

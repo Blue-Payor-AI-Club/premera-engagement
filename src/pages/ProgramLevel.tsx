@@ -32,7 +32,7 @@ import { usePortalData } from '../context/PortalDataContext'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
-import { downloadCsv } from '../lib/csv'
+import { downloadCsv, yesNo } from '../lib/csv'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
@@ -506,12 +506,13 @@ export default function ProgramLevel() {
           </select>
           <button
             onClick={() => downloadCsv(`${division}-program-${new Date().toISOString().slice(0, 10)}.csv`, [
-              ['Operational Area', 'Status', 'Status Note', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
+              ['Operational Area', 'Status', 'Status Note', 'Premera Attention', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
               ...workstreams.map((w) => [
                 w.name,
                 STATUS[w.status as StatusKey]?.label ?? w.status,
                 w.statusMessage ?? '',
-                w.premeraActionRequired ? 'Yes' : 'No',
+                yesNo(w.needsPremeraAttention),
+                yesNo(w.premeraActionRequired),
                 w.accomplishments.join('\n'),
                 w.activities.join('\n'),
               ]),

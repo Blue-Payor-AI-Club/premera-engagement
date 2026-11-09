@@ -3,6 +3,15 @@
 
 const cell = (value: string) => (/[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
 
+/** M/D/YYYY → YYYY-MM-DD, which Excel reads the same in every locale (M/D flips or stays text in D/M ones).
+ * TBD, N/A and blanks pass through. */
+export const csvDate = (d: string | undefined) => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d ?? '')
+  return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : d ?? ''
+}
+
+export const yesNo = (b: boolean | undefined) => (b ? 'Yes' : 'No')
+
 export function toCsv(rows: string[][]): string {
   // Leading BOM so Excel opens UTF-8 (en dashes, accented names) correctly.
   return '﻿' + rows.map((r) => r.map(cell).join(',')).join('\r\n')

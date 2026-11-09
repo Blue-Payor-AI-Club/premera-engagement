@@ -11,6 +11,8 @@ import { STATUS, type StatusKey } from '../data/status'
 import { csvDate, downloadCsv, yesNo } from '../lib/csv'
 import { AddButton, EditButton, EditCell, EditHeader } from '../components/Editor'
 import { issueRequest, type Division } from '../lib/editRequests'
+import OverdueTag from '../components/OverdueTag'
+import { isOverdue } from '../lib/format'
 
 const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
 
@@ -122,7 +124,7 @@ function IssueGroup({
                   ))}
                 </ul>
               </td>
-              <td className="px-4 py-3 align-top text-[#0f7aa6] font-medium">{row.date || '—'}</td>
+              <td className="px-4 py-3 align-top text-[#0f7aa6] font-medium">{row.date || '—'}<OverdueTag date={row.date} done={row.status === 'complete'} /></td>
               <td className="px-4 py-3 align-top text-center">
                 <SeverityBadge value={row.severity} />
               </td>
@@ -176,7 +178,7 @@ function IssueGroup({
               {row.date && (
                 <span className="flex items-center gap-1 text-xs text-[#0f7aa6] font-medium ml-auto">
                   <CalendarDays size={12} className="shrink-0" />
-                  {row.date}
+                  {row.date}<OverdueTag date={row.date} done={row.status === 'complete'} />
                 </span>
               )}
               {row.severity && (
@@ -242,6 +244,7 @@ export default function Risks() {
   const listed = [...ito, ...bpo].filter(shown)
   const totalAtRisk = listed.length
   const totalPremera = listed.filter((r) => r.premeraActionRequired).length
+  const totalOverdue = listed.filter((r) => isOverdue(r.date, r.status === 'complete')).length
 
   return (
     <div className="slide">
@@ -257,6 +260,12 @@ export default function Risks() {
             Risks &amp; Issues: <span className="text-amber-600">{totalAtRisk}</span>
           </span>
         </div>
+        {totalOverdue > 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 border border-red-600 w-full sm:w-auto">
+            <AlertTriangle size={15} className="text-white shrink-0" />
+            <span className="text-sm font-semibold text-white">Overdue: {totalOverdue}</span>
+          </div>
+        )}
         {totalPremera > 0 && (
           <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 border border-red-200 w-full sm:w-auto">
             <Flag size={15} className="text-red-500 shrink-0" />

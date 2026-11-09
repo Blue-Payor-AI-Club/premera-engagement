@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { PortalDataContext } from '../context/PortalDataContext'
 import { EditButton } from './Editor'
 import type { EditRequest } from '../lib/editRequests'
+import { formatDateTime, timeAgo } from '../lib/format'
 
 interface Props {
   title: string
@@ -42,6 +43,11 @@ export default function SlideHeader({ title, sampleLines, asOf = 'DD/MM/YYYY', e
           <div className="text-sm font-semibold text-slate-700">
             {asOf}{edit && <EditButton request={edit} title="Edit report header" />}
           </div>
+          {portal?.updatedAt && (
+            <div className="text-[10px] text-slate-500 mt-0.5" title={`Last saved ${formatDateTime(portal.updatedAt)}`}>
+              Updated {timeAgo(portal.updatedAt)}
+            </div>
+          )}
         </div>
       </div>
     </header>

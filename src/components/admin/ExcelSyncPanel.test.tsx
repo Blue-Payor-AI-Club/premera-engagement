@@ -28,6 +28,10 @@ function renderPanel(refresh = vi.fn()) {
         replaceDocument: vi.fn(),
         reset: vi.fn(),
         edit: vi.fn(),
+        preview: false,
+        setPreview: vi.fn(),
+        updatedAt: null,
+        loaded: true,
       }}
     >
       <ExcelSyncPanel />

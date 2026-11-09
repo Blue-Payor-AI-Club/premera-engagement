@@ -143,11 +143,38 @@ test.describe('In-app editing', () => {
     await expect(page.getByText(/Risks & Issues:/)).toBeVisible()
     await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
     await page.goto('/program')
-    await expect(page.getByText(/Operational Areas/)).toBeVisible()
+    await expect(page.getByText(/Program Scorecard/)).toBeVisible()
     await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
     const res = await request.fetch(`${API}/portal/edit`, {
       method: 'PUT', data: { data: {}, summary: 'x' }, headers: { Authorization: `Bearer ${token}`, 'If-Match': '"1"' },
     })
     expect(res.status()).toBe(403)
+  })
+})
+
+test.describe('Client-facing view', () => {
+  test('UST "View as Premera" shows exactly the Premera view, with editing off, and exits cleanly', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/risks')
+    await expect(page.getByText(/Payroll parallel run/).first()).toBeVisible() // UST only
+    await page.getByRole('button', { name: 'View as Premera' }).click()
+    await expect(page.getByText('Previewing as Premera.')).toBeVisible()
+    await expect(page.getByText(/Payroll parallel run/)).toHaveCount(0)
+    await expect(page.getByText(RUNBOOKS).first()).toBeVisible() // shared with Premera
+    await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
+    await expect(page.getByText('UST only')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Exit preview' }).click()
+    await expect(page.getByText(/Payroll parallel run/).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add risk / issue' })).toBeVisible()
+  })
+
+  test('past-due items are tagged Overdue and counted; Premera sees an honest scorecard and empty-state text', async ({ page, request }) => {
+    await signInAs(page, request, USERS.premera, '/risks')
+    // Demo due dates are June 2026; the summary pill and the row tags must say so.
+    await expect(page.getByText(/^Overdue: \d+/)).toBeVisible()
+    await expect(page.getByText('Overdue', { exact: true }).first()).toBeVisible()
+    await page.goto('/program')
+    await expect(page.getByText(/Operational Areas? shared with you/)).toBeVisible()
+    await expect(page.getByText('Program Level Status Reporting Sample')).toHaveCount(0)
+    await expect(page.getByText(/Updated /).first()).toBeVisible()
   })
 })

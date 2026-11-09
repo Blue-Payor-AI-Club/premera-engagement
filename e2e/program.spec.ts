@@ -47,6 +47,10 @@ test.describe('Program Level', () => {
 })
 
 test.describe('quick feedback (thumbs)', () => {
+  // The grid renders its rows a moment after the page; until then the first thumbs on screen is a
+  // milestone's, so 'first visible' would point at different controls before and after.
+  const gridReady = (page: import('@playwright/test').Page) => expect(page.locator('[data-tour="workstream-grid"] [row-id] [title="Needs attention"]').first()).toBeVisible()
+
   test('thumbs up records a vote that survives a reload, and a second click removes it', async ({ page, request }) => {
     const who = { email: `e2e.thumbs${Date.now()}@ust.com`, role: 'ust_stakeholder' as const }
     const token = await signInAs(page, request, who)
@@ -63,13 +67,18 @@ test.describe('quick feedback (thumbs)', () => {
     const who = { email: `e2e.down${Date.now()}@premera.com`, role: 'premera_stakeholder' as const }
     // Premera users need something visible to vote on: the demo flags one workstream per division.
     await signInAs(page, request, who)
-    const down = page.getByTitle('Needs attention').first()
+    await gridReady(page)
+    // Wait for the real document: clicking during the bundled-sample flash (D2) votes on a row that is then replaced.
+    await expect(page.getByText('Delivery & Operational Continuity').first()).toBeVisible()
+    await expect(page.getByText(/1 Operational Area shared with you/)).toBeVisible()
+    // Each row renders the control twice (grid + phone layout); always use the visible one.
+    const down = page.getByTitle('Needs attention').filter({ visible: true }).first()
     await down.click()
     await page.getByRole('button', { name: 'Submit' }).click()
     await expect(page.getByRole('alert')).toHaveText('Please describe your concern, or choose Skip.')
     await page.getByRole('button', { name: 'Skip' }).click()
     await expect(page.getByPlaceholder('Describe the concern...')).toHaveCount(0)
-    await expect(page.getByTitle('Needs attention').first()).toHaveClass(/red-500/)
+    await expect(down).toHaveClass(/red-500/)
 
   })
 
@@ -77,7 +86,8 @@ test.describe('quick feedback (thumbs)', () => {
     const who = { email: `e2e.concern${Date.now()}@ust.com`, role: 'ust_stakeholder' as const }
     const admin = await tokenFor(request, USERS.super)
     await signInAs(page, request, who)
-    await page.getByTitle('Needs attention').nth(1).click()
+    await gridReady(page)
+    await page.getByTitle('Needs attention').filter({ visible: true }).nth(1).click()
     await page.getByPlaceholder('Describe the concern...').fill('Dates slipped twice ✓ — ünïcode check')
     await page.getByRole('button', { name: 'Submit' }).click()
     await expect(page.getByPlaceholder('Describe the concern...')).toHaveCount(0)
@@ -88,11 +98,12 @@ test.describe('quick feedback (thumbs)', () => {
 
   test('Esc closes the concern popup without losing the vote', async ({ page, request }) => {
     await signInAs(page, request, { email: `e2e.esc${Date.now()}@ust.com`, role: 'ust_stakeholder' })
-    await page.getByTitle('Needs attention').first().click()
+    await gridReady(page)
+    await page.getByTitle('Needs attention').filter({ visible: true }).first().click()
     await expect(page.getByPlaceholder('Describe the concern...')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByPlaceholder('Describe the concern...')).toHaveCount(0)
-    await expect(page.getByTitle('Needs attention').first()).toHaveClass(/red-500/)
+    await expect(page.getByTitle('Needs attention').filter({ visible: true }).first()).toHaveClass(/red-500/)
   })
 })
 

@@ -4,6 +4,7 @@ import { type IssueRow, type ActionStatus } from '../data/portalData'
 import StatusDot from './StatusDot'
 import { STATUS, type StatusKey } from '../data/status'
 import VisibleToPremera from './VisibleToPremera'
+import OverdueTag from './OverdueTag'
 import { AddButton, EditButton, EditCell, EditHeader, useEditor } from './Editor'
 import { riskActionRequest } from '../lib/editRequests'
 
@@ -117,7 +118,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                           {a.action}<VisibleToPremera flagged={a.needsPremeraAttention} />
                         </td>
                         <td className="px-3 py-2.5 font-medium" style={{ color: '#0067b1' }}>{a.owner}</td>
-                        <td className="px-3 py-2.5 text-slate-600">{a.dueDate}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{a.dueDate}<OverdueTag date={a.dueDate} done={a.actionStatus === 'closed'} /></td>
                         <td className="px-3 py-2.5 text-center">
                           <span
                             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-xs font-semibold"
@@ -146,7 +147,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="text-xs">
                           <span className="font-semibold" style={{ color: '#0067b1' }}>{a.owner}</span>
-                          {a.dueDate && <span className="ml-2 text-slate-400">· {a.dueDate}</span>}
+                          {a.dueDate && <span className="ml-2 text-slate-400">· {a.dueDate}</span>}<OverdueTag date={a.dueDate} done={a.actionStatus === 'closed'} />
                         </div>
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-xs font-semibold"
@@ -166,7 +167,7 @@ export default function RiskActionsModal({ issue, onClose }: { issue: IssueRow |
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 text-xs text-slate-400">
           {/* The issue's own due date and status, not an action's — labelled so the two aren't confused. */}
-          <span>Issue due: {issue.date || '—'}</span>
+          <span>Issue due: {issue.date || '—'}<OverdueTag date={issue.date} done={issue.status === 'complete'} /></span>
           <div className="flex items-center gap-1.5">
             <span>Issue status:</span>
             <StatusDot status={issue.status} />

@@ -431,3 +431,12 @@ export function raidRequest(t: TransitionData, index?: number): EditRequest {
   }
 }
 
+
+/** A stored M/D/YYYY date whose year is likely a typo: more than a year back or three ahead
+ * (same rule as the importer's DATE_OUT_OF_RANGE warning). */
+export function implausibleYear(value: string | undefined, now = new Date()): boolean {
+  const year = /^\d{1,2}\/\d{1,2}\/(\d{4})$/.exec(value ?? '')?.[1]
+  if (!year) return false
+  const y = Number(year)
+  return y < now.getFullYear() - 1 || y > now.getFullYear() + 3
+}

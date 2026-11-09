@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import UstViewNotice from './components/UstViewNotice'
 import { Menu, X, BarChart3, AlertTriangle, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
@@ -12,8 +12,9 @@ import Activity from './pages/Activity'
 import Login from './pages/Login'
 import InviteAccept from './pages/InviteAccept'
 import RequirePermission from './components/RequirePermission'
-import { Spinner } from './components/ui'
+import { ErrorBanner, Spinner, btnSecondary } from './components/ui'
 import { useAuth } from './context/AuthContext'
+import { PortalDataContext } from './context/PortalDataContext'
 import UserMenu from './components/UserMenu'
 import { PRIMARY_NAV } from './lib/navigation'
 
@@ -423,6 +424,22 @@ function TopBar() {
   )
 }
 
+/** Pages built from the portal document wait for this user's real data: a loader while it
+ * comes, the error (with a retry) if it can't — never the bundled sample data shown as real. */
+function PortalGate({ children }: { children: ReactNode }) {
+  const portal = useContext(PortalDataContext)
+  if (!portal || portal.loaded) return <>{children}</>
+  if (portal.error && !portal.loading) {
+    return (
+      <div className="card p-6 space-y-3">
+        <ErrorBanner>Couldn&apos;t load the portal data ({portal.error}). Please try again in a moment.</ErrorBanner>
+        <button type="button" onClick={portal.refresh} className={btnSecondary}>Try again</button>
+      </div>
+    )
+  }
+  return <div className="card p-6"><Spinner label="Loading the latest portal data…" /></div>
+}
+
 function AuthenticatedApp() {
   return (
     <div className="min-h-screen">
@@ -432,8 +449,8 @@ function AuthenticatedApp() {
         <UstViewNotice />
         <Routes>
           <Route path="/" element={<Navigate to="/program" replace />} />
-          <Route path="/program" element={<ProgramLevel />} />
-          <Route path="/risks" element={<Risks />} />
+          <Route path="/program" element={<PortalGate><ProgramLevel /></PortalGate>} />
+          <Route path="/risks" element={<PortalGate><Risks /></PortalGate>} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/activity" element={<RequirePermission permission="audit:read"><Activity /></RequirePermission>} />
           <Route path="/admin" element={<RequirePermission permission="portal:write"><Admin /></RequirePermission>} />

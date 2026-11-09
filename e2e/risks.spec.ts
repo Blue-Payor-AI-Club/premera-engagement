@@ -48,11 +48,11 @@ test.describe('Risks & Issues', () => {
 
   test('the actions modal opens with the actions and closes with Esc and the X', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust, '/risks')
-    await page.getByRole('button', { name: /actions|View/i }).first().click()
+    await page.getByRole('button', { name: 'Actions', exact: true }).first().click()
     await expect(page.getByText('Actions & Ownership')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByText('Actions & Ownership')).toBeHidden()
-    await page.getByRole('button', { name: /actions|View/i }).first().click()
+    await page.getByRole('button', { name: 'Actions', exact: true }).first().click()
     await page.locator('button:has(svg.lucide-x)').first().click()
     await expect(page.getByText('Actions & Ownership')).toBeHidden()
   })

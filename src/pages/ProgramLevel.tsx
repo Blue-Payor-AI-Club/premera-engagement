@@ -28,7 +28,8 @@ import { TRANSITION_DATA } from '../data/transitionData'
 import StatusDot from '../components/StatusDot'
 import QuickFeedback from '../components/QuickFeedback'
 import VisibleToPremera from '../components/VisibleToPremera'
-import { PortalDataContext, usePortalData } from '../context/PortalDataContext'
+import { PortalDataContext, usePortalData, useUstView } from '../context/PortalDataContext'
+import { isOverdue } from '../lib/format'
 import type { WorkstreamIcon, Workstream, IssueRow, MilestoneSection } from '../data/portalData'
 import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
@@ -278,6 +279,8 @@ function Bullets({ items }: { items: string[] }) {
 
 function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
   const total = workstreams.length
+  // Premera's document only holds the areas shared with them; say so rather than imply it's the whole program.
+  const shared = !useUstView()
   const counts = workstreams.reduce<Record<string, number>>((acc, ws) => {
     acc[ws.status] = (acc[ws.status] ?? 0) + 1
     return acc
@@ -286,7 +289,7 @@ function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
   return (
     <div data-tour="scorecard" className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 rounded-lg border border-slate-200 bg-white shadow-sm">
       <span className="text-lg font-bold text-slate-500 tracking-wide">
-        Program Scorecard : {total} Operational Areas
+        Program Scorecard : {total} Operational Area{total === 1 ? '' : 's'}{shared && ' shared with you'}
       </span>
       {/* One pill per status, zeros included, so the pills add up to the total. */}
       <div className="flex flex-wrap gap-2 ml-auto">
@@ -305,7 +308,8 @@ function RisksSection({ issues }: { issues: IssueRow[] }) {
   const atRiskCount = issues.filter(r => isAtRisk(r.status)).length
   // Of the open (at-risk/delayed) items listed below, those flagged for Premera.
   const premeraCount = issues.filter(r => isAtRisk(r.status) && r.premeraActionRequired).length
-  if (atRiskCount === 0) return null
+  const overdueCount = issues.filter((r) => isOverdue(r.date, r.status === 'complete')).length
+  if (atRiskCount === 0 && overdueCount === 0) return null
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
       <div className="flex flex-col sm:flex-row gap-2">
@@ -315,6 +319,12 @@ function RisksSection({ issues }: { issues: IssueRow[] }) {
             Risks &amp; Issues: <span className="text-amber-600">{atRiskCount}</span>
           </span>
         </div>
+        {overdueCount > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 w-full sm:w-auto">
+            <AlertTriangle size={13} className="text-white shrink-0" />
+            <span className="text-xs font-semibold text-white">Overdue: {overdueCount}</span>
+          </div>
+        )}
         {premeraCount > 0 && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-100 border border-red-200 w-full sm:w-auto">
             <Flag size={13} className="text-red-500 shrink-0" />
@@ -350,9 +360,11 @@ export default function ProgramLevel() {
   const [statusFilter, setStatusFilter] = useState<'' | StatusKey>('')
   // The grid and the phone list show the filtered workstreams; the scorecard stays on all of them.
   const q = query.trim().toLowerCase()
-  const workstreams = p.workstreams.filter((w) =>
+  // Memoized: a new array on every render would make AG-Grid rebuild its cells, which unmounts an
+  // open thumbs-down popup mid-click.
+  const workstreams = useMemo(() => p.workstreams.filter((w) =>
     (!q || [w.name, w.statusMessage ?? '', ...w.accomplishments, ...w.activities].some((t) => t.toLowerCase().includes(q))) &&
-    (!statusFilter || w.status === statusFilter))
+    (!statusFilter || w.status === statusFilter)), [p.workstreams, q, statusFilter])
   const isTransition = tab === 'transition'
   // Synced from the workbook; the bundled copy only covers an API that predates the block.
   const transition = data.transition ?? TRANSITION_DATA
@@ -366,6 +378,8 @@ export default function ProgramLevel() {
   }, [])
 
   const expandContext = useMemo(() => ({ expandedIds, toggle: toggleExpand }), [expandedIds, toggleExpand])
+  // Stable on purpose: a new context object makes AG-Grid redraw every cell, remounting an open thumbs popup.
+  const gridContext = useMemo<GridContext>(() => ({ navigate, division }), [navigate, division])
 
   const handleTabChange = useCallback((k: ProgramTab) => {
     setTab(k)
@@ -486,7 +500,7 @@ export default function ProgramLevel() {
     <div className="slide">
       <SlideHeader
         title={isTransition ? 'Transition Program' : `${p.levelLabel} Highlights`}
-        sampleLines={isTransition ? [] : ['Program Level Status Reporting Sample']}
+        sampleLines={[]}
         asOf={isTransition ? transition.asOf : data.asOf}
         edit={() => (isTransition ? transitionHeaderRequest(transition) : programHeaderRequest(data, division))}
       />
@@ -565,7 +579,9 @@ export default function ProgramLevel() {
           </button>
         </div>
         {workstreams.length === 0 && (
-          <p className="text-sm text-slate-500 text-center py-6">No operational areas match these filters.</p>
+          <p className="text-sm text-slate-500 text-center py-6">
+            {p.workstreams.length ? 'No operational areas match these filters.' : 'No operational areas have been shared yet.'}
+          </p>
         )}
 
         {/* ── AG-Grid (desktop md+) ── */}
@@ -587,7 +603,7 @@ export default function ProgramLevel() {
               isFullWidthRow={isFullWidthRow}
               fullWidthCellRenderer={MilestoneDetailRenderer}
               getRowHeight={getRowHeight}
-              context={{ navigate, division } satisfies GridContext}
+              context={gridContext}
             />
           </ExpandContext.Provider>
         </div>

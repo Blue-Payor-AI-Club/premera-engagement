@@ -49,14 +49,14 @@ describe('QuickFeedback thumbs down', () => {
     expect(screen.queryByPlaceholderText('Describe the concern...')).toBeNull()
   })
 
-  it('stays open when the textarea scrolls itself, but closes on a page scroll', async () => {
+  it('stays open, with the typed text, when the textarea or the page scrolls', async () => {
     renderIt()
     await userEvent.click(screen.getByTitle('Needs attention'))
     const box = screen.getByPlaceholderText('Describe the concern...')
+    await userEvent.type(box, 'Half typed')
     fireEvent.scroll(box)
-    expect(screen.getByPlaceholderText('Describe the concern...')).toBeInTheDocument()
     fireEvent.scroll(document)
-    expect(screen.queryByPlaceholderText('Describe the concern...')).toBeNull()
+    expect(screen.getByPlaceholderText('Describe the concern...')).toHaveValue('Half typed')
   })
 
   it('a failed save keeps the popup and the typed text', async () => {

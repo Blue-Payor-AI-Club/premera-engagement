@@ -5,6 +5,7 @@ import StatusDot from './StatusDot'
 import QuickFeedback from './QuickFeedback'
 import VisibleToPremera from './VisibleToPremera'
 import { AddButton, EditButton, EditCell, EditHeader, useEditor } from './Editor'
+import OverdueTag from './OverdueTag'
 
 interface Props {
   headLabel: string
@@ -64,6 +65,9 @@ export default function MilestoneTable({
           </tr>
         </thead>
         <tbody>
+          {sections.length === 0 && !editable && (
+            <tr><td colSpan={columnCount} className="px-3 py-4 text-center text-sm text-slate-400">No milestones shared yet.</td></tr>
+          )}
           {sections.map((section) => (
             <Fragment key={section.id}>
               <tr style={{ background: sectionColor }}>
@@ -77,8 +81,8 @@ export default function MilestoneTable({
                   <td className="px-3 py-1.5 text-slate-700 break-words">
                     {row.label}<VisibleToPremera flagged={row.needsPremeraAttention} />
                   </td>
-                  <td className="px-3 py-1.5 text-slate-600">{row.due}</td>
-                  <td className="px-3 py-1.5 text-slate-500">{row.revised || '—'}</td>
+                  <td className="px-3 py-1.5 text-slate-600">{row.due}{!row.revised && <OverdueTag date={row.due} done={row.status === 'complete'} />}</td>
+                  <td className="px-3 py-1.5 text-slate-500">{row.revised || '—'}<OverdueTag date={row.revised} done={row.status === 'complete'} /></td>
                   <td className="px-3 py-1.5 text-center">
                     <StatusDot status={row.status} />
                   </td>
@@ -104,6 +108,7 @@ export default function MilestoneTable({
         <div style={{ background: headColor, color: headTextColor }} className="font-semibold px-3 py-2 text-sm">
           {headLabel}
         </div>
+        {sections.length === 0 && !editable && <p className="px-3 py-4 text-center text-sm text-slate-400">No milestones shared yet.</p>}
         {sections.map((section) => (
           <div key={section.id}>
             <div style={{ background: sectionColor, color: sectionTextColor }} className="px-3 py-1.5 font-semibold text-[13px]">
@@ -117,6 +122,7 @@ export default function MilestoneTable({
                     <div className="text-xs text-slate-500 mt-0.5">
                       {row.due && <>Due {row.due}</>}
                       {row.revised && <> · Revised {row.revised}</>}
+                      <OverdueTag date={row.revised || row.due} done={row.status === 'complete'} />
                     </div>
                   )}
                 </div>

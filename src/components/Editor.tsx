@@ -1,9 +1,8 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { Pencil, Plus, X } from 'lucide-react'
-import { AuthContext } from '../context/AuthContext'
-import { PortalDataContext } from '../context/PortalDataContext'
+import { PortalDataContext, useUstView } from '../context/PortalDataContext'
 import type { PortalData } from '../data/portalData'
-import { STATUS_OPTIONS, normalizeDate, type EditRequest, type Field, type Values } from '../lib/editRequests'
+import { STATUS_OPTIONS, implausibleYear, normalizeDate, type EditRequest, type Field, type Values } from '../lib/editRequests'
 import { ErrorBanner, btnDanger, btnPrimary, btnSecondary, inputCls } from './ui'
 
 // In-app editing for UST users. Every editable thing on screen opens this one form, driven by a
@@ -28,8 +27,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useEditor(): ((r: EditRequest) => void) | null {
   const open = useContext(EditorContext)
-  const canEdit = useContext(AuthContext)?.canEdit ?? false
-  return canEdit ? open : null
+  return useUstView() ? open : null
 }
 
 export function EditButton({ request, title = 'Edit', className = 'ml-1.5' }: { request: () => EditRequest; title?: string; className?: string }) {
@@ -119,6 +117,11 @@ function EditDialog({ request, onClose }: { request: EditRequest; onClose: () =>
     }
     setFieldErrors(errs)
     if (Object.keys(errs).length) return
+    // Likely typos (2023 for 2026) are asked about, not refused: an old date can be real.
+    const odd = request.fields.filter((f) => f.type === 'date' && implausibleYear(values[f.key] as string))
+    if (odd.length && !window.confirm(
+      `${odd.map((f) => `${f.label}: ${values[f.key]}`).join('\n')}\n\nThat year looks unusual (more than a year ago, or over three years ahead). Save anyway?`,
+    )) return
     run(`${request.isNew ? 'Added' : 'Edited'} ${short(request.label)}`, (d) => request.save(d, values))
   }
 

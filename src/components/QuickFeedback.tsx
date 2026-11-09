@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { ThumbsUp, ThumbsDown, X } from 'lucide-react'
 import { apiFetch } from '../lib/api'
@@ -10,6 +10,17 @@ type Vote = 'up' | 'down'
 export const MAX_COMMENT = 1000
 // Rough popup height, used to open it above the button when there's no room below.
 const POPUP_HEIGHT = 210
+const POPUP_WIDTH = 256
+
+/** Below the button, or above it when there's no room below; kept on screen. `height` is the
+ * popup's measured height once rendered (POPUP_HEIGHT is only the first guess). */
+function placeNear(el: Element, height = POPUP_HEIGHT): { top: number; left: number } {
+  const rect = el.getBoundingClientRect()
+  const left = Math.max(8, Math.min(rect.right - POPUP_WIDTH, window.innerWidth - POPUP_WIDTH - 8))
+  const below = rect.bottom + 6
+  const top = below + height > window.innerHeight ? rect.top - height - 6 : below
+  return { top: Math.max(8, Math.min(top, window.innerHeight - height - 8)), left }
+}
 
 interface QfEntry {
   vote: Vote
@@ -26,13 +37,24 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
   const [confirming, setConfirming] = useState(false)
   const [needsText, setNeedsText] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  const downRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+
+  // Re-place with the real height once rendered and whenever a message makes it taller, so its
+  // buttons never end up below the bottom of the screen.
+  useLayoutEffect(() => {
+    if (!showComment || !popRef.current || !downRef.current) return
+    const next = placeNear(downRef.current, popRef.current.offsetHeight || POPUP_HEIGHT)
+    setPopPos((p) => (p && p.top === next.top && p.left === next.left ? p : next))
+  }, [showComment, needsText, saveFailed])
 
   const path = `/quick-feedback/${encodeURIComponent(itemId)}`
 
   // Hydrate vote from API on mount
   useEffect(() => {
     if (authLoading || !token) return
-    apiFetch(path)
+    // no-store: a remounted control must not be handed the cached pre-vote answer (the vote would look lost).
+    apiFetch(path, { cache: 'no-store' })
       .then(async res => {
         const entry = await res.json() as QfEntry | null
         if (entry) {
@@ -43,19 +65,20 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
       .catch(() => { /* API unavailable — start with no vote */ })
   }, [authLoading, path, token])
 
-  // Close popup on any page scroll (capture phase) or resize. Scrolls inside the popup
-  // (the textarea scrolling itself once the text passes 3 lines) must not close it.
+  // On page scroll (capture phase) or resize the popup follows its button instead of closing —
+  // closing lost the user's half-typed concern whenever the page moved. Scrolls inside the
+  // popup (its textarea) are ignored.
   useEffect(() => {
     if (!showComment) return
-    const close = (e: Event) => {
+    const follow = (e: Event) => {
       if (e.target instanceof Element && e.target.closest('[data-qf-pop]')) return
-      setShowComment(false)
+      if (downRef.current) setPopPos(placeNear(downRef.current, popRef.current?.offsetHeight || POPUP_HEIGHT))
     }
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
+    window.addEventListener('scroll', follow, true)
+    window.addEventListener('resize', follow)
     return () => {
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', follow, true)
+      window.removeEventListener('resize', follow)
     }
   }, [showComment])
 
@@ -94,12 +117,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
       apiFetch(path, { method: 'DELETE' }).catch(() => setVote('down'))
       return
     }
-    const rect = e.currentTarget.getBoundingClientRect()
-    const popupWidth = 256
-    const left = Math.max(8, Math.min(rect.right - popupWidth, window.innerWidth - popupWidth - 8))
-    const below = rect.bottom + 6
-    const top = below + POPUP_HEIGHT > window.innerHeight ? Math.max(8, rect.top - POPUP_HEIGHT - 6) : below
-    setPopPos({ top, left })
+    setPopPos(placeNear(e.currentTarget))
     setDraft(savedComment)
     setNeedsText(false)
     setSaveFailed(false)
@@ -130,6 +148,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
   const popup = showComment && popPos
     ? createPortal(
         <div
+          ref={popRef}
           data-qf-pop
           className="fixed z-[9999] w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-3"
           style={{ top: popPos.top, left: popPos.left }}
@@ -208,6 +227,7 @@ export default function QuickFeedback({ itemId, itemLabel }: { itemId: string; i
           <ThumbsUp size={12} />
         </button>
         <button
+          ref={downRef}
           onClick={handleDown}
           title="Needs attention"
           className={`p-1 rounded transition ${

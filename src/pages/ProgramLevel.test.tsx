@@ -12,7 +12,7 @@ function renderPage(data: PortalData = DEFAULT_PORTAL_DATA) {
   return render(
     <MemoryRouter>
       <AuthStub role="premera_stakeholder">
-        <PortalDataContext.Provider value={{ data, loading: false, error: null, refresh: vi.fn(), replaceDocument: vi.fn(), reset: vi.fn(), edit: vi.fn() }}>
+        <PortalDataContext.Provider value={{ data, loading: false, error: null, refresh: vi.fn(), replaceDocument: vi.fn(), reset: vi.fn(), edit: vi.fn(), preview: false, setPreview: vi.fn(), updatedAt: null, loaded: true }}>
           <ProgramLevel />
         </PortalDataContext.Provider>
       </AuthStub>

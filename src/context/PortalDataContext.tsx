@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_PORTAL_DATA, type PortalData, type ProgramTab } from '../data/portalData'
 import { ApiError, apiFetch } from '../lib/api'
-import { useAuth } from './AuthContext'
+import { AuthContext, useAuth } from './AuthContext'
 
 // Bumped from _v6: the document shape gained statusMessage/needsPremeraAttention/
 // milestones (Workstream) and severity/priority (IssueRow) fields, and — separately —
@@ -28,6 +28,14 @@ interface Ctx {
   /** In-app edit (UST only): applies `mutate` to a copy of the version on screen and saves it.
    * Rejects with a readable message; on a version clash it also reloads the latest data. */
   edit: (summary: string, mutate: (draft: PortalData) => void) => Promise<void>
+  /** UST only: showing the document exactly as Premera receives it ("View as Premera"). */
+  preview: boolean
+  setPreview: (on: boolean) => void
+  /** When the document was last saved (any upload, edit or restore), ISO; null until loaded. */
+  updatedAt: string | null
+  /** False until this user's data is on screen (fetched, or their own cached copy). Until then pages
+   * show a loader / the error, never the bundled sample data as if it were real (D2). */
+  loaded: boolean
 }
 
 const PortalDataContext = createContext<Ctx | null>(null)
@@ -46,12 +54,12 @@ const EMPTY_PORTAL_DATA: PortalData = {
   tower: { ...DEFAULT_PORTAL_DATA.tower, accomplishments: [], activities: [], milestones: [], keyActivities: [], issues: [] },
 }
 
-function loadCache(): PortalData {
+function loadCache(): PortalData | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return { ...DEFAULT_PORTAL_DATA, ...(JSON.parse(raw) as PortalData) }
   } catch { /* ignore corrupt storage */ }
-  return DEFAULT_PORTAL_DATA
+  return null
 }
 
 function persist(d: PortalData): void {
@@ -60,25 +68,32 @@ function persist(d: PortalData): void {
 
 export function PortalDataProvider({ children }: { children: ReactNode }) {
   const { loading: authLoading, token } = useAuth()
-  const [data, setData]   = useState<PortalData>(loadCache)
+  const [cached] = useState(loadCache)
+  const [data, setData]   = useState<PortalData>(cached ?? EMPTY_PORTAL_DATA)
+  const [loaded, setLoaded] = useState(cached !== null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [etag, setEtag]   = useState<string | null>(null)
+  const [preview, setPreview] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   const fetchDocument = useCallback(() => {
     setLoading(true)
-    apiFetch('/portal')
+    apiFetch(preview ? '/portal?as=premera' : '/portal')
       .then(async res => {
         const et = res.headers.get('ETag')
         if (et) setEtag(et)
+        const lm = res.headers.get('Last-Modified')
+        setUpdatedAt(lm ? new Date(lm).toISOString() : null)
         const json = await res.json() as PortalData
         setData(json)
-        persist(json)
+        if (!preview) persist(json)
         setError(null)
+        setLoaded(true)
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [preview])
 
   // The cached copy is whatever the last user's role was allowed to see (Premera users get a
   // filtered document), so it must not outlive their session — neither in storage nor in
@@ -88,6 +103,8 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY)
     setData(EMPTY_PORTAL_DATA)
     setEtag(null)
+    setPreview(false)
+    setLoaded(false)
   }, [authLoading, token])
 
   // Fetch from API once auth is resolved; re-fetch if token changes
@@ -132,6 +149,7 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const edit = useCallback(async (summary: string, mutate: (draft: PortalData) => void) => {
+    if (preview) throw new Error('Exit "View as Premera" to make changes.')
     // Without the server's ETag the screen may be a cached copy; saving it could overwrite newer data.
     if (!etag) throw new Error('The latest data has not loaded yet. Press Refresh and try again.')
     const draft = structuredClone(data)
@@ -147,6 +165,7 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
       const json = await res.json() as PortalData
       setData(json)
       persist(json)
+      setUpdatedAt(new Date().toISOString())
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         fetchDocument()
@@ -154,11 +173,11 @@ export function PortalDataProvider({ children }: { children: ReactNode }) {
       }
       throw err
     }
-  }, [data, etag, fetchDocument])
+  }, [data, etag, fetchDocument, preview])
 
   const value = useMemo(
-    () => ({ data, loading, error, refresh: fetchDocument, replaceDocument, reset, edit }),
-    [data, loading, error, fetchDocument, replaceDocument, reset, edit],
+    () => ({ data, loading, error, refresh: fetchDocument, replaceDocument, reset, edit, preview, setPreview, updatedAt, loaded }),
+    [data, loading, error, fetchDocument, replaceDocument, reset, edit, preview, updatedAt, loaded],
   )
   return <PortalDataContext.Provider value={value}>{children}</PortalDataContext.Provider>
 }
@@ -168,4 +187,13 @@ export function usePortalData(): Ctx {
   const ctx = useContext(PortalDataContext)
   if (!ctx) throw new Error('usePortalData must be used within a PortalDataProvider')
   return ctx
+}
+
+/** True when the UST-only parts of the UI (edit controls, visibility badges) should show:
+ * a UST user who isn't previewing as Premera. Reads contexts directly so isolated tests work. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useUstView(): boolean {
+  const canEdit = useContext(AuthContext)?.canEdit ?? false
+  const preview = useContext(PortalDataContext)?.preview ?? false
+  return canEdit && !preview
 }

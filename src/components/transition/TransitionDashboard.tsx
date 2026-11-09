@@ -6,6 +6,11 @@ import StatusChip from './StatusChip'
 import VisibleToPremera from '../VisibleToPremera'
 import { AddButton, EditButton, EditCell, EditHeader } from '../Editor'
 import { dashboardRowRequest, raidRequest, transitionHeaderRequest } from '../../lib/editRequests'
+import OverdueTag from '../OverdueTag'
+
+const emptyRow = (cols: number) => (
+  <tr><td colSpan={cols} className="px-3 py-4 text-center text-sm text-slate-400">Nothing shared in this section yet.</td></tr>
+)
 
 // Header colours are taken from the source slide; body rows use a plain white/slate
 // zebra instead of the slide's per-tower fills, which read as noise on screen.
@@ -66,6 +71,7 @@ function WorkstreamTable({ data }: { data: TransitionData }) {
           </tr>
         </thead>
         <tbody>
+          {groups.length === 0 && emptyRow(12)}
           {groups.map((group, g) => {
             let notesCoveredFor = 0 // rows still hidden under a merged Notes cell
             return group.rows.map((row, i) => {
@@ -123,6 +129,7 @@ function RaidTable({ data }: { data: TransitionData }) {
           </tr>
         </thead>
         <tbody>
+          {items.length === 0 && emptyRow(7)}
           {items.map((r, i) => (
             <tr key={i} className={i % 2 === 0 ? 'bg-white' : STRIPE_ODD}>
               <td className={`${td} text-center font-semibold`}>{r.type}</td>
@@ -137,7 +144,7 @@ function RaidTable({ data }: { data: TransitionData }) {
                 )}
               </td>
               <td className={`${td} text-center text-[12px]`}>{r.owner}</td>
-              <td className={`${td} text-center text-[12px]`}>{r.dueDate}</td>
+              <td className={`${td} text-center text-[12px]`}>{r.dueDate}<OverdueTag date={r.dueDate} done={r.status === 'Closed' || r.status === 'Mitigated'} /></td>
               <td className={`${td} text-center text-[12px]`}>{r.status}</td>
               <EditCell className={td} title="Edit RAID item" request={() => raidRequest(data, i)} />
             </tr>

@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# premera-engagement — web app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The web front end of the UST × Premera Engagement Portal. Everyone signed in sees **Program
+Level** (ITO, BPO, Transition), **Risks & Issues** and **Feedback to UST**. UST roles also get
+**Activity** (the audit trail) and **Data Sync** (Excel import / export / rollback), and Super
+Admins get **Super Admin** (users, access requests, invites, notification recipients, email log).
 
-Currently, two official plugins are available:
+React 19 + Vite + TypeScript, MUI, ag-grid, Tailwind and shadcn/ui (Radix, in `src/components/ui/`). All data comes from
+[`premera-engagement-api`](../premera-engagement-api/README.md); there is no mock-data mode.
+The read-only phone app is [`premera-engagement-mobile`](../premera-engagement-mobile/README.md).
+These are three separate git repos that share one parent folder.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Prerequisites
 
-## React Compiler
+- **Node 24.** Under Node 26, 17 of the unit tests fail because Node's built-in `localStorage`
+  replaces jsdom's (issue T3 in [`docs/PRODUCTION-READINESS.md`](./docs/PRODUCTION-READINESS.md)).
+- The API running locally. Follow its README.
 
-The React Compileder is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Running it
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev          # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The API URL is `VITE_API_BASE_URL`: `.env.development` points it at `http://localhost:3000/v1`,
+and `.env.production` points it at the deployed server.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Sign in with your work email and the 6-digit code that the API emails you. In local
+development the API prints the code to its console instead of sending it.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Scripts
+
+```bash
+npm run build        # tsc -b && vite build -> dist/
+npm run lint
+npm test             # vitest (jsdom)
+npx vitest run src/pages/Login.test.tsx   # a single file
+npm run e2e          # Playwright; see e2e/README.md
 ```
+
+`npm run e2e` starts its own API (port 3999, with a throwaway database) and its own Vite
+server (port 5199). It never touches the shared server.
+
+## How it is put together
+
+- `src/lib/api.ts`: `apiFetch` is the only fetch wrapper. It adds the bearer token, turns error
+  bodies into `ApiError`, and signs the user out on a 401 from any path outside `/auth/*`.
+- `src/context/AuthContext.tsx` owns the session and the user's permission list.
+  `RequirePermission` and `lib/navigation.ts` hide what the role can't use. This is UI only:
+  the server enforces every permission itself.
+- `src/context/PortalDataContext.tsx` holds the portal document and caches it in localStorage.
+  When the document's shape changes, bump `STORAGE_KEY` so stale caches are dropped.
+- `src/data/portalData.ts` holds the document types. The API (`src/types/portal.ts`) and the
+  mobile app keep their own copies, so a contract change has to be made in all three.
+- Portal content comes from Excel through **Data Sync**. UST users can also edit, add and
+  delete rows in place: `components/Editor.tsx` is the one form, `lib/editRequests.ts` holds
+  the per-sheet fields (they mirror the workbook columns), and saves go through
+  `PortalDataContext.edit()` to `PUT /portal/edit` with `If-Match`. Premera users get no edit
+  controls.
+
+## Docs
+
+- [`DEPLOY.md`](./DEPLOY.md): Docker (Nginx) and manual deployment.
+- [`docs/PRODUCTION-READINESS.md`](./docs/PRODUCTION-READINESS.md): test results and the known issues.
+- [`API.md`](./API.md): the API contract as the web app uses it.

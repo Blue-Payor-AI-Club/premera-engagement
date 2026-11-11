@@ -2,7 +2,7 @@
 // the same columns and rules, so a row saved here round-trips through an Excel download/upload.
 import { uid, type IssueRow, type MilestoneRow, type MilestoneSection, type PortalData, type RiskAction, type Workstream } from '../data/portalData'
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
-import type { DashboardRow, RaidItem, TransitionContact, TransitionData } from '../data/transitionData'
+import { TRANSITION_PHASES, type PhaseRow, type RaidItem, type TransitionContact, type TransitionData } from '../data/transitionData'
 import { WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
 
 
@@ -336,70 +336,75 @@ export function priorityRequest(t: TransitionData, index?: number): EditRequest 
   }
 }
 
-const DASHBOARD_FIELDS: Field[] = [
-  { key: 'tower', label: 'Tower', required: true },
-  { key: 'workstream', label: 'Workstream', required: true },
-  { key: 'planningStatus', label: 'Planning Status', type: 'status', required: true },
-  { key: 'planningStart', label: 'Planning Start', type: 'date' },
-  { key: 'sowSubmit', label: 'SOW Submit', type: 'date' },
-  { key: 'sowApproval', label: 'SOW Approval', type: 'date' },
-  { key: 'onboardingComplete', label: 'Onboarding Complete', type: 'date' },
-  { key: 'transitionStatus', label: 'Transition Status (N/A = phase does not apply)', type: 'status' },
-  { key: 'transitionStart', label: 'Transition Start', type: 'date' },
-  { key: 'goLive', label: 'Go-Live', type: 'date' },
-  { key: 'notes', label: 'Notes', type: 'lines' },
-  { key: 'alertNotes', label: 'Alert Notes (shown in red)', type: 'lines' },
-  ATTENTION,
-]
+// Transition dashboard: a workstream heading with one row per phase, each with its own milestones.
 
-export function dashboardRowRequest(t: TransitionData, g?: number, i?: number): EditRequest {
-  const tower = g === undefined ? undefined : t.dashboard[g].tower
-  const row = g === undefined || i === undefined ? undefined : t.dashboard[g].rows[i]
+const findPhase = (d: PortalData, phaseId: string): PhaseRow => {
+  for (const w of tr(d).dashboard) for (const p of w.phases) if (p.id === phaseId) return p
+  throw new Error('That phase is no longer in the document — reload and try again.')
+}
+
+/** A phase's milestones as one fixed section, so MilestoneTable's add/edit/delete work on them. */
+export const phaseMilestones = (phaseId: string, title: string): Locate => (d) => [{ id: phaseId, title, rows: findPhase(d, phaseId).milestones }]
+
+const blankPhase = (phase: string): PhaseRow => ({ id: uid(), phase, status: null, start: '', end: '', milestones: [] })
+
+/** Renaming keeps the phases; a new workstream starts with every standard phase, blank. */
+export function transitionWorkstreamRequest(t: TransitionData, index?: number): EditRequest {
+  const w = index === undefined ? undefined : t.dashboard[index]
   return {
-    label: row ? `dashboard row ${quote(row.workstream)}` : 'dashboard row',
-    isNew: !row,
-    fields: DASHBOARD_FIELDS,
-    value: row ? {
-      tower, workstream: row.workstream,
-      planningStatus: row.planning.status, planningStart: row.planning.start, sowSubmit: row.planning.sowSubmit,
-      sowApproval: row.planning.sowApproval, onboardingComplete: row.planning.onboardingComplete,
-      transitionStatus: row.transition.status ?? '', transitionStart: row.transition.start, goLive: row.transition.goLive,
-      notes: (row.notes ?? []).filter((n) => !n.alert).map((n) => n.text),
-      alertNotes: (row.notes ?? []).filter((n) => n.alert).map((n) => n.text),
-      needsPremeraAttention: row.needsPremeraAttention,
-    } : { tower, planningStatus: 'notStarted' },
+    label: w ? `workstream ${quote(w.workstream)}` : 'workstream',
+    isNew: !w,
+    fields: [{ key: 'workstream', label: 'Workstream', required: true }],
+    value: { workstream: w?.workstream },
     save: (d, v) => {
-      const groups = tr(d).dashboard
+      if (w) tr(d).dashboard[index!].workstream = str(v.workstream)
+      else tr(d).dashboard.push({ workstream: str(v.workstream), phases: TRANSITION_PHASES.map(blankPhase) })
+    },
+    remove: w && ((d) => { tr(d).dashboard.splice(index!, 1) }),
+  }
+}
+
+export function phaseRequest(t: TransitionData, wsIndex: number, phase?: PhaseRow): EditRequest {
+  const w = t.dashboard[wsIndex]
+  // Each phase appears once per workstream (the workbook rejects a second one).
+  const taken = new Set(w.phases.filter((p) => p.id !== phase?.id).map((p) => p.phase))
+  return {
+    label: `${phase ? `phase ${quote(phase.phase)}` : 'phase'} of ${quote(w.workstream)}`,
+    isNew: !phase,
+    fields: [
+      { key: 'phase', label: 'Phase', type: 'select', required: true, options: TRANSITION_PHASES.filter((p) => !taken.has(p)).map((p) => ({ value: p, label: p })) },
+      { key: 'status', label: 'Status (blank = not set yet / does not apply)', type: 'status' },
+      { key: 'start', label: 'Start', type: 'date' },
+      { key: 'end', label: 'End', type: 'date' },
+      { key: 'notes', label: 'Notes', type: 'lines' },
+      { key: 'alertNotes', label: 'Alert Notes (shown in red)', type: 'lines' },
+      ATTENTION,
+    ],
+    value: phase ? {
+      phase: phase.phase, status: phase.status ?? '', start: phase.start, end: phase.end,
+      notes: (phase.notes ?? []).filter((n) => !n.alert).map((n) => n.text),
+      alertNotes: (phase.notes ?? []).filter((n) => n.alert).map((n) => n.text),
+      needsPremeraAttention: phase.needsPremeraAttention,
+    } : { phase: TRANSITION_PHASES.find((p) => !taken.has(p)) },
+    save: (d, v) => {
       const notes = [
         ...(v.notes as string[]).map((text) => ({ text })),
         ...(v.alertNotes as string[]).map((text) => ({ text, alert: true })),
       ]
-      const next: DashboardRow = {
-        ...row,
-        workstream: str(v.workstream),
-        planning: {
-          status: v.planningStatus as StatusKey, start: str(v.planningStart), sowSubmit: str(v.sowSubmit),
-          sowApproval: str(v.sowApproval), onboardingComplete: str(v.onboardingComplete),
-        },
-        transition: { status: (str(v.transitionStatus) || null) as StatusKey | null, start: str(v.transitionStart), goLive: str(v.goLive) },
+      const next: PhaseRow = {
+        id: phase?.id ?? uid(),
+        phase: str(v.phase),
+        status: (str(v.status) || null) as StatusKey | null,
+        start: str(v.start), end: str(v.end),
+        milestones: phase?.milestones ?? [],
         notes: notes.length ? notes : undefined,
         needsPremeraAttention: flag(v.needsPremeraAttention),
       }
-      const towerName = str(v.tower)
-      if (row && towerName === tower) { groups[g!].rows[i!] = next; return }
-      if (row) {
-        groups[g!].rows.splice(i!, 1)
-        if (!groups[g!].rows.length) groups.splice(g!, 1)
-      }
-      const group = groups.find((x) => x.tower === towerName)
-      if (group) group.rows.push(next)
-      else groups.push({ tower: towerName, rows: [next] })
+      const phases = tr(d).dashboard[wsIndex].phases
+      if (phase) phases[indexOf(phases, phase.id)] = next
+      else phases.push(next)
     },
-    remove: row && ((d) => {
-      const groups = tr(d).dashboard
-      groups[g!].rows.splice(i!, 1)
-      if (!groups[g!].rows.length) groups.splice(g!, 1)
-    }),
+    remove: phase && ((d) => removeId(tr(d).dashboard[wsIndex].phases, phase.id)),
   }
 }
 

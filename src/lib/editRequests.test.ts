@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { TRANSITION_DATA } from '../data/transitionData'
-import { dashboardRowRequest, issueRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
+import { issueRequest, phaseMilestones, phaseRequest, transitionWorkstreamRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
 
 const doc = (): PortalData => structuredClone({ ...DEFAULT_PORTAL_DATA, transition: TRANSITION_DATA })
 
@@ -55,12 +55,31 @@ describe('edit requests', () => {
     expect(d.transition!.summary.premeraVisible).not.toContain('Changed risk')
   })
 
-  it('a dashboard row moved to a new tower creates that group', () => {
+  it('a new workstream starts with every standard phase; a phase edit keeps its id and milestones', () => {
     const d = doc()
-    const lastGroup = d.transition!.dashboard.length - 1
-    const req = dashboardRowRequest(d.transition!, lastGroup, 0)
-    req.save(d, { ...req.value, tower: 'Brand New Tower', notes: [], alertNotes: ['Call Premera'] })
-    const moved = d.transition!.dashboard.find((g) => g.tower === 'Brand New Tower')!
-    expect(moved.rows[0].notes).toEqual([{ text: 'Call Premera', alert: true }])
+    transitionWorkstreamRequest(d.transition!).save(d, { workstream: 'Brand New' })
+    const wi = d.transition!.dashboard.length - 1
+    const added = d.transition!.dashboard[wi]
+    expect(added.workstream).toBe('Brand New')
+    expect(added.phases.map((p) => p.phase)).toEqual(['Discovery & Planning', 'Onboarding', 'Transition / KT', 'Shadow', 'Reverse Shadow', 'Steady State'])
+    expect(added.phases.every((p) => p.status === null && !!p.id)).toBe(true)
+
+    const shadow = added.phases[3]
+    milestoneRowRequest(phaseMilestones(shadow.id, shadow.phase), shadow.id).save(d, { label: 'Shadow sign-off', due: '1/5/2027', revised: '', status: 'notStarted' })
+    expect(shadow.milestones.map((m) => m.label)).toEqual(['Shadow sign-off'])
+
+    const req = phaseRequest(d.transition!, wi, shadow)
+    // A phase the workstream already has can't be picked a second time.
+    expect(req.fields[0].options!.map((o) => o.value)).toEqual(['Shadow'])
+    req.save(d, { ...req.value, status: 'atRisk', alertNotes: ['Call Premera'], notes: [] })
+    const saved = d.transition!.dashboard[wi].phases[3]
+    expect(saved.id).toBe(shadow.id)
+    expect(saved.status).toBe('atRisk')
+    expect(saved.notes).toEqual([{ text: 'Call Premera', alert: true }])
+    expect(saved.milestones.map((m) => m.label)).toEqual(['Shadow sign-off'])
+
+    phaseRequest(d.transition!, wi, saved).remove!(d)
+    expect(d.transition!.dashboard[wi].phases.map((p) => p.phase)).not.toContain('Shadow')
+    expect(phaseRequest(d.transition!, wi).value.phase).toBe('Shadow') // the free phase is offered first
   })
 })

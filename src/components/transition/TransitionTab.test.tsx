@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TransitionTab from './TransitionTab'
 import { TRANSITION_DATA } from '../../data/transitionData'
-import { flattenDashboard } from './dashboardRows'
+import { AuthStub } from '../../test/auth'
 
-const allRows = () => TRANSITION_DATA.dashboard.flatMap((g) => g.rows)
+// The phase rows carry thumbs feedback, which needs a signed-in user (Premera: no edit controls).
+const render = (ui: React.ReactElement) => rtlRender(<AuthStub role="premera_stakeholder">{ui}</AuthStub>)
 
 describe('Transition tab — Executive Summary', () => {
   it('is open by default and shows every section of the slide', () => {
@@ -65,53 +66,53 @@ describe('Transition tab — Dashboard', () => {
   }
   const textOf = (els: HTMLElement[]) => els.map((e) => e.textContent).join(' | ')
 
-  it('has the two-level header from the slide with its group labels', async () => {
+  it('has one row per phase under each workstream heading: Phase, Status, Start, End, Milestones, Feedback', async () => {
     render(<TransitionTab />)
-    for (const label of ['Tower', 'Workstream', 'Discovery / Planning / Onboarding', 'Transition', 'SOW Submit', 'SOW Approval', 'Onboarding', 'Go-Live', 'Notes']) {
-      expect(await within(grid()).findByText(label, { selector: '.ag-header-cell-text, .ag-header-group-text' })).toBeInTheDocument()
+    for (const label of ['Phase', 'Status', 'Start', 'End', 'Milestones', 'Feedback']) {
+      expect(await within(grid()).findByText(label, { selector: '.ag-header-cell-text' })).toBeInTheDocument()
     }
-    expect(within(grid()).getAllByText('Status', { selector: '.ag-header-cell-text' })).toHaveLength(2)
+    // No tower level and no grouped "Discovery / Planning / Onboarding" header any more.
+    expect(within(grid()).queryByText('Tower', { selector: '.ag-header-cell-text' })).toBeNull()
+    expect(grid().querySelector('.ag-header-group-text')).toBeNull()
   })
 
-  it('lists every workstream from the slide', async () => {
+  it('shows every workstream as a heading, each with its phases', async () => {
     render(<TransitionTab />)
-    expect(allRows()).toHaveLength(16)
-    for (const r of allRows()) expect((await within(grid()).findAllByText(r.workstream)).length).toBeGreaterThan(0)
+    for (const w of TRANSITION_DATA.dashboard) expect((await within(grid()).findAllByText(w.workstream)).length).toBeGreaterThan(0)
+    expect(within(grid()).getAllByText('Reverse Shadow').length).toBe(TRANSITION_DATA.dashboard.length)
   })
 
-  it('merges each tower cell over its rows, and a Notes cell over the rows it describes', () => {
-    const rows = flattenDashboard(TRANSITION_DATA.dashboard)
-    const towerSpan = Object.fromEntries(rows.filter((r) => r.i === 0).map((r) => [r.tower, r.groupSize]))
-    expect(towerSpan['Contracting']).toBe(3)
-    expect(towerSpan['Customer Service & Platform Engineering']).toBe(4)
-    expect(towerSpan['Enterprise Technology Solutions']).toBe(4)
-    expect(towerSpan['Claims Operations']).toBe(1)
-    const span = (w: string) => rows.find((r) => r.row.workstream === w)!.notesSpan
-    expect(span('Service Desk and ITOC')).toBe(3)
-    expect(span('Microsoft 365 Support')).toBe(0) // under the merged cell
-    expect(span('Batch Monitoring')).toBe(0)
-    expect(span('Provider Contact Center')).toBe(1) // its own notes cell
-  })
-
-  it('renders the call-to-action note in red, and the other notes normally', async () => {
+  it('a phase row shows its status, dates and milestone count', async () => {
     render(<TransitionTab />)
-    expect(await within(grid()).findByText(/Process an on-boarding SOW for the team/)).toHaveClass('text-red-600')
-    expect(within(grid()).getByText(/MSA In Progress: UST Redlines in-work/)).not.toHaveClass('text-red-600')
+    const cells = await rowCells('Discovery & Planning')
+    expect(textOf(cells)).toMatch('At Risk')
+    expect(textOf(cells)).toMatch('9/16/2026')
+    expect(textOf(cells)).toMatch('2 milestones ›')
   })
 
-  it('shows status as dots with an accessible label, and N/A where a phase does not apply', async () => {
+  it('shows N/A for a phase that is not set, and the red call-to-action note on its phase', async () => {
     render(<TransitionTab />)
-    const msa = await rowCells('MSA')
-    expect(msa.some((c) => c.querySelector('[title="At Risk"]'))).toBe(true)
-    expect(textOf(msa)).toMatch('N/A')
-    const ito = await rowCells('Service Desk and ITOC')
-    expect(ito.some((c) => c.querySelector('[title="On Track"]'))).toBe(true)
-    expect(ito.some((c) => c.querySelector('[title="At Risk"]'))).toBe(true)
+    expect(textOf(await rowCells('Steady State'))).toMatch('N/A')
+    expect((await within(grid()).findByText(/Process an on-boarding SOW for the team/)).className).toMatch('text-red-600')
   })
 
-  it('leaves the transition cells blank (not "N/A") when the slide has nothing for that row', async () => {
+  it('narrows to one workstream from the filter', async () => {
+    const user = userEvent.setup()
     render(<TransitionTab />)
-    expect(textOf(await rowCells('Connectivity & Access'))).not.toMatch('N/A')
+    await user.selectOptions(screen.getByLabelText('Workstream'), 'Claims Operations')
+    await within(grid()).findAllByText('Claims Operations')
+    expect(within(grid()).queryByText('Service Desk and ITOC')).toBeNull()
+    expect(within(grid()).getAllByText('Reverse Shadow')).toHaveLength(1)
+  })
+
+  it('opens a phase with its own milestones', async () => {
+    const user = userEvent.setup()
+    render(<TransitionTab />)
+    await user.click((await within(grid()).findAllByText('Discovery & Planning'))[0])
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('MSA')).toBeInTheDocument()
+    expect((await within(dialog).findAllByText('SOW submitted')).length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText('SOW approved').length).toBeGreaterThan(0)
   })
 
   it('shows the AS OF date and the RAID log', async () => {

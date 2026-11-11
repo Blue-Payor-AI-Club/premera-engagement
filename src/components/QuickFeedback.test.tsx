@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QuickFeedback from './QuickFeedback'
+import { resetVoteCache } from '../lib/myVotes'
 import { AuthContext } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
 
@@ -23,6 +24,23 @@ describe('QuickFeedback thumbs down', () => {
   beforeEach(() => {
     mockFetch.mockReset()
     mockFetch.mockResolvedValue(new Response('null'))
+    resetVoteCache()
+  })
+
+  it('lights up an earlier thumbs-up from one shared request, not one per control', async () => {
+    mockFetch.mockImplementation(async () => new Response(JSON.stringify({ up: ['w1'] })))
+    const auth = { loading: false, token: 'jwt' } as React.ContextType<typeof AuthContext>
+    render(
+      <AuthContext.Provider value={auth}>
+        <QuickFeedback itemId="w1" itemLabel="One" />
+        <QuickFeedback itemId="w2" itemLabel="Two" />
+      </AuthContext.Provider>,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    const [one, two] = screen.getAllByTitle('Good')
+    expect(one.className).toMatch(/emerald-600/)
+    expect(two.className).not.toMatch(/emerald-600/)
+    expect(mockFetch.mock.calls.map(([p]) => p)).toEqual(['/quick-feedback/mine'])
   })
 
   it('refuses an empty Submit and asks for a description', async () => {

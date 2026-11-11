@@ -206,7 +206,7 @@ export default function ExcelSyncPanel() {
                   {result.summary.milestoneRows} milestone rows
                   {result.summary.transition && (
                     <>
-                      , {result.summary.transition.dashboardRows} transition workstreams,{' '}
+                      , {result.summary.transition.dashboardRows} transition phase rows,{' '}
                       {result.summary.transition.raidItems} RAID items
                     </>
                   )}

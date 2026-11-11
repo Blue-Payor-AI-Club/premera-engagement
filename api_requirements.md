@@ -169,14 +169,17 @@ interface TransitionBlock {      // rows carry no ids (nothing here is quick-fee
     risks: string[]
     executiveFocus: string[]
   }
-  dashboard: {                   // grouped by tower, in display order
-    tower: string
-    rows: {
-      workstream: string
-      planning: { status: StatusKey; start: string; sowSubmit: string; sowApproval: string; onboardingComplete: string }
-      transition: { status: StatusKey | null; start: string; goLive: string }  // null = "N/A"
-      notesRowSpan?: number      // merge this row's Notes cell down N rows (itself included); stays within the tower
-      notes?: { text: string; alert?: boolean }[]                              // alert = rendered red
+  dashboard: {                   // one entry per workstream, in display order (no tower level)
+    workstream: string
+    phases: {                    // Discovery & Planning, Onboarding, Transition / KT, Shadow, Reverse Shadow, Steady State
+      id: string                 // stable; thumbs feedback is keyed by it
+      phase: string
+      status: StatusKey | null   // null = not set yet / does not apply ("N/A")
+      start: string
+      end: string
+      milestones: MilestoneRow[] // this phase's own milestones
+      notes?: { text: string; alert?: boolean }[]   // alert = rendered red
+      needsPremeraAttention?: boolean
     }[]
   }[]
   raid: { type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string }[]
@@ -185,10 +188,11 @@ interface TransitionBlock {      // rows carry no ids (nothing here is quick-fee
 
 `transition` is optional on `PUT /v1/portal` (a document or backup saved before the tab existed omits it); the server
 fills in the default, and every `GET /v1/portal` response includes it. It is edited through the workbook's
-`TransitionContacts`, `TransitionSummary`, `TransitionDashboard` and `TransitionRaid` sheets plus three `Meta` rows
+`TransitionContacts`, `TransitionSummary`, `TransitionPhases`, `TransitionMilestones` and `TransitionRaid` sheets plus three `Meta` rows
 (`Transition As-Of Date`, `Transition Overall Status`, `Transition Overall Summary`). Those sheets and Meta rows are
 optional on import: a workbook without them keeps the stored Transition data and returns an
-`OPTIONAL_SHEET_MISSING` warning per absent sheet.
+`OPTIONAL_SHEET_MISSING` warning per absent sheet. (A workbook from before the phase layout has a
+`TransitionDashboard` sheet instead of `TransitionPhases`; it is ignored and the stored dashboard kept.)
 
 ### Status enum reference (`src/data/status.ts`)
 

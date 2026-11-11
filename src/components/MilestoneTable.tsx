@@ -31,6 +31,8 @@ interface Props {
   locate?: (d: PortalData) => MilestoneSection[]
   /** Where these milestones live, for the Activity log (e.g. "ITO program"). */
   where?: string
+  /** The sections are given (a Transition phase's milestones): no adding, renaming or deleting them. */
+  fixedSections?: boolean
 }
 
 export default function MilestoneTable({
@@ -44,12 +46,13 @@ export default function MilestoneTable({
   showFeedback = true,
   locate,
   where = 'milestones',
+  fixedSections = false,
 }: Props) {
   const editable = !!useEditor() && !!locate
   const sectionReq = (s: MilestoneSection) => () => milestoneSectionRequest(locate!, where, s)
   const rowReq = (s: MilestoneSection, r: MilestoneSection['rows'][number]) => () => milestoneRowRequest(locate!, s.id, r)
   // Phone layout has no columns, so the pencil sits at the end of the line there.
-  const editSection = (s: MilestoneSection) => editable && <EditButton title={`Edit section ${s.title}`} request={sectionReq(s)} />
+  const editSection = (s: MilestoneSection) => editable && !fixedSections && <EditButton title={`Edit section ${s.title}`} request={sectionReq(s)} />
   const editRow = (s: MilestoneSection, r: MilestoneSection['rows'][number]) =>
     editable && <EditButton title={`Edit milestone ${r.label}`} className="" request={rowReq(s, r)} />
   const addRow = (s: MilestoneSection) => editable && <AddButton request={() => milestoneRowRequest(locate!, s.id)}>Add milestone</AddButton>
@@ -77,7 +80,7 @@ export default function MilestoneTable({
     ]
   }, [editable, showFeedback, statusLabel, liveLocate])
 
-  const addSection = editable && (
+  const addSection = editable && !fixedSections && (
     <div className="px-3 py-2"><AddButton request={() => milestoneSectionRequest(locate!, where)}>Add milestone section</AddButton></div>
   )
 

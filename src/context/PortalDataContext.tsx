@@ -8,7 +8,7 @@ import { AuthContext, useAuth } from './AuthContext'
 // portal data is now Excel-sourced rather than admin-edited, so a stale pre-sync cache
 // from before this change shouldn't silently reappear on first load.
 // _v9: Workstream/IssueRow gained premeraActionRequired.
-const STORAGE_KEY = 'ustpremera_portaldata_v9'
+const STORAGE_KEY = 'ustpremera_portaldata_v10'
 
 interface Ctx {
   data: PortalData

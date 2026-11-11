@@ -17,7 +17,7 @@ export default function AuthShell({ title, subtitle, children }: { title: string
           {subtitle && <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{subtitle}</p>}
           <div className="mt-5">{children}</div>
         </div>
-        <p className="text-center text-[11px] text-slate-400 mt-4">Engagement Portal · UST · Premera Blue Cross</p>
+        <p className="text-center text-[11px] text-slate-400 mt-4">Transition Summary Portal · UST · Premera Blue Cross</p>
       </div>
     </div>
   )

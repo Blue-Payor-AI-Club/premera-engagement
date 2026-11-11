@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import ProgramLevel from './ProgramLevel'
+import { PROGRAM_TABS, overallStatus } from '../lib/programTabs'
+import type { StatusKey } from '../data/status'
 import { PortalDataContext } from '../context/PortalDataContext'
 import { AuthStub } from '../test/auth'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
@@ -20,110 +22,97 @@ function renderPage(data: PortalData = DEFAULT_PORTAL_DATA) {
   )
 }
 
-describe('/program — Transition tab', () => {
-  it('adds a Transition tab after ITO and BPO', () => {
-    renderPage()
-    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toHaveLength(3)
-    expect(tabs[0]).toMatch(/^ITO/)
-    expect(tabs[1]).toMatch(/^BPO/)
-    expect(tabs[2]).toMatch(/^Transition/)
-  })
+const ws = (workstream: string, extra: Partial<TransitionData['dashboard'][number]> = {}): TransitionData['dashboard'][number] => ({
+  workstream,
+  phases: [
+    { id: `${workstream}-1`, phase: 'Discovery & Planning', status: 'atRisk', start: '1/1/2027', end: '2/1/2027', milestones: [
+      { id: `${workstream}-m1`, label: 'SOW approved', due: '1/15/2027', revised: '', status: 'complete' },
+      { id: `${workstream}-m2`, label: 'Kickoff', due: '1/20/2027', revised: '', status: 'onTrack' },
+    ] },
+    { id: `${workstream}-2`, phase: 'Onboarding', status: 'onTrack', start: '2/1/2027', end: '3/1/2027', milestones: [] },
+    { id: `${workstream}-3`, phase: 'Shadow', status: null, start: '', end: '', milestones: [] },
+  ],
+  ...extra,
+})
 
-  it('opens on ITO and does not show the Transition content until selected', () => {
-    renderPage()
-    expect(screen.getByRole('tab', { name: /ITO/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByTestId('transition-tab')).toBeNull()
-  })
+const synced: TransitionData = {
+  ...TRANSITION_DATA,
+  asOf: '12/25/26',
+  dashboard: [
+    ws('Service Desk and ITOC', { summary: 'Service desk KT on plan.', status: 'complete' }),
+    ws('Claims Operations'),
+  ],
+  raid: [
+    { type: 'R', description: 'Service desk risk', mitigation: [], owner: 'A', dueDate: '1/1/2020', status: 'Open', workstream: 'service desk and itoc' },
+    { type: 'I', description: 'Claims issue', mitigation: [], owner: 'B', dueDate: '', status: 'Open', workstream: 'Claims Operations' },
+    { type: 'R', description: 'Program-wide risk', mitigation: [], owner: 'C', dueDate: '', status: 'Open' },
+  ],
+}
 
-  it('shows the Executive Summary first and the Dashboard after it, replacing the division content', async () => {
-    renderPage()
-    await userEvent.setup().click(screen.getByRole('tab', { name: /Transition/ }))
-
-    expect(screen.getByRole('tab', { name: /Transition/ })).toHaveAttribute('aria-selected', 'true')
-    const tab = screen.getByTestId('transition-tab')
-    expect(tab).toBeInTheDocument()
-    const headings = Array.from(tab.querySelectorAll('section[aria-label]')).map((s) => s.getAttribute('aria-label'))
-    expect(headings).toEqual(['Transition Program Executive Summary', 'Transition Program Dashboard'])
-
-    // Division-specific summary is hidden, the page title reflects the tab, and the legend stays.
-    expect(screen.getByRole('heading', { level: 1, name: 'Transition Program' })).toBeInTheDocument()
-    expect(screen.queryByText(/Risks & Issues:/)).toBeNull()
-    expect(screen.getAllByText('On Track').length).toBeGreaterThan(0) // the legend (phase rows show it too)
-  })
-
-  // The tab used to render a hard-coded file, so a sync could never change it.
-  const synced: TransitionData = {
-    ...TRANSITION_DATA,
-    asOf: '12/25/26',
-    overallStatus: 'onTrack',
-    premeraContacts: [{ role: 'Synced Sponsor', name: 'Sam Synced' }],
-    summary: { ...TRANSITION_DATA.summary, overallStatus: 'Synced overall paragraph.', risks: ['Synced risk'] },
-    dashboard: [
-      {
-        workstream: 'Synced Workstream',
-        phases: [
-          { id: 'p1', phase: 'Synced Phase', status: 'onTrack', start: '1/1/2027', end: '2/1/2027', milestones: [], notes: [{ text: 'Synced note', alert: true }] },
-        ],
-      },
-    ],
-    raid: [{ type: 'I', description: 'Synced RAID item', mitigation: ['Synced step'], owner: 'Syd', dueDate: '4/1/2027', status: 'Closed' }],
-  }
-
-  it("shows the Transition data the portal document supplies — what Data Sync imports — not the bundled copy", async () => {
+describe('/program — one tab per operational area', () => {
+  it('has the static title and the operational-area tabs, in order, with no ITO / BPO / Transition', () => {
     renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
-    await userEvent.setup().click(screen.getByRole('tab', { name: /Transition/ }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' })).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(PROGRAM_TABS)
+    expect(PROGRAM_TABS.filter((t) => t === 'Provider Data Management')).toHaveLength(1)
+    expect(screen.queryByText(/Program Scorecard/)).toBeNull()
+  })
 
-    expect(screen.getAllByText('12/25/26')).toHaveLength(2) // page header and the dashboard header
-    expect(screen.getByText('Synced overall paragraph.')).toBeInTheDocument()
-    expect(screen.getByLabelText(/premera contacts/i)).toHaveTextContent('Synced Sponsor:Sam Synced')
-    expect(screen.getByText('Synced risk')).toBeInTheDocument()
-    // The dashboard grid renders asynchronously.
-    expect((await screen.findAllByText('Synced Workstream')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Synced Phase').length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Synced note/).length).toBeGreaterThan(0)
-    expect(screen.getByText('Synced RAID item')).toBeInTheDocument()
-    expect(screen.getByText(/Synced step/)).toBeInTheDocument()
+  it("shows the legend, then the selected tab's KPI cards (phases + milestones)", () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
+    const kpis = screen.getByRole('group', { name: 'Status counts' })
+    expect(within(kpis).getByLabelText('At Risk: 1')).toBeInTheDocument()
+    expect(within(kpis).getByLabelText('On Track: 2')).toBeInTheDocument()
+    expect(within(kpis).getByLabelText('Complete: 1')).toBeInTheDocument()
+    expect(within(kpis).getByLabelText('Not Started: 0')).toBeInTheDocument()
+    expect(screen.getByText('Status').compareDocumentPosition(kpis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 
-    // None of the bundled slide content leaks through.
-    expect(screen.queryAllByText('Service Desk and ITOC')).toHaveLength(0)
-    expect(screen.queryByText(/Delays in MSA and SOW approvals/)).toBeNull()
-    expect(screen.queryByText('Wayne Heller')).toBeNull()
+  it("shows the tab's title card, overall status and text, its dashboard and only its RAID items", async () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
+    const card = screen.getByRole('region', { name: 'Transition Program Summary - Service Desk and ITOC' })
+    expect(within(card).getByText('Overall: Complete')).toBeInTheDocument()
+    expect(within(card).getByText('Service desk KT on plan.')).toBeInTheDocument()
+    const dash = screen.getByRole('region', { name: 'Transition Program Dashboard' })
+    expect(within(dash).queryByText(/Overall:/)).toBeNull() // not repeated
+    expect(within(dash).getByText('12/25/26')).toBeInTheDocument()
+    expect(await screen.findByText('Service desk risk')).toBeInTheDocument()
+    expect(screen.queryByText('Claims issue')).toBeNull()
+    expect(screen.queryByText('Program-wide risk')).toBeNull()
+    expect(screen.getByText(/Risks & Issues:/)).toHaveTextContent('Risks & Issues: 1')
+    expect(screen.getByText('Overdue: 1')).toBeInTheDocument()
+  })
+
+  it('switching tabs switches everything to that area; an unset status is worked out from the phases', async () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Claims Operations (100-400)' }))
+    const card = screen.getByRole('region', { name: 'Transition Program Summary - Claims Operations (100-400)' })
+    expect(within(card).getByText('Overall: At Risk')).toBeInTheDocument()
+    expect(await screen.findByText('Claims issue')).toBeInTheDocument()
+    expect(screen.queryByText('Service desk risk')).toBeNull()
+    expect(screen.queryByText(/Overdue:/)).toBeNull()
+  })
+
+  it('a tab with nothing behind it says so', async () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Employer Portal Project' }))
+    expect(screen.getByText('Nothing shared for Employer Portal Project yet.')).toBeInTheDocument()
+    expect(screen.queryByText(/Risks & Issues:/)).toBeNull()
   })
 
   it('falls back to the bundled Transition content when the API response has no transition block', async () => {
     renderPage({ ...DEFAULT_PORTAL_DATA, transition: undefined })
-    await userEvent.setup().click(screen.getByRole('tab', { name: /Transition/ }))
-    expect((await screen.findAllByText('Service Desk and ITOC')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('region', { name: 'Transition Program Summary - Service Desk and ITOC' })).toBeInTheDocument()
   })
+})
 
-  it('renders repeated workstream names, notes and RAID text (user-edited data) without key warnings', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const ws = synced.dashboard[0]
-    renderPage({
-      ...DEFAULT_PORTAL_DATA,
-      transition: {
-        ...synced,
-        summary: { ...synced.summary, accomplishments: ['Same', 'Same'], risks: ['Same', 'Same'] },
-        premeraContacts: [{ role: 'Lead', name: 'A' }, { role: 'Lead', name: 'B' }],
-        dashboard: [{ ...ws, phases: [{ ...ws.phases[0], notes: [{ text: 'dup' }, { text: 'dup' }] }] }, { ...ws, phases: [{ ...ws.phases[0], id: 'p2' }] }],
-        raid: [synced.raid[0], { ...synced.raid[0], mitigation: ['x', 'x'] }],
-      },
-    })
-    await userEvent.setup().click(screen.getByRole('tab', { name: /Transition/ }))
-    expect(screen.getAllByText('Synced Workstream').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getAllByText('Same')).toHaveLength(4)
-    expect(error.mock.calls.flat().join(' ')).not.toMatch(/same key/i)
-    error.mockRestore()
-  })
-
-  it('returns to the same division view when switching back', async () => {
-    renderPage()
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: /BPO/ }))
-    await user.click(screen.getByRole('tab', { name: /Transition/ }))
-    await user.click(screen.getByRole('tab', { name: /BPO/ }))
-    expect(screen.queryByTestId('transition-tab')).toBeNull()
-    expect(screen.getByRole('tab', { name: /BPO/ })).toHaveAttribute('aria-selected', 'true')
+describe('overallStatus', () => {
+  const p = (status: StatusKey | null) => ({ id: 'x', phase: 'Shadow', status, start: '', end: '', milestones: [] })
+  it('uses the set status, else the worst phase, else complete / on track / not started', () => {
+    expect(overallStatus({ workstream: 'a', status: 'onTrack', phases: [p('delayed')] })).toBe('onTrack')
+    expect(overallStatus({ workstream: 'a', phases: [p('onTrack'), p('delayed'), p('atRisk')] })).toBe('delayed')
+    expect(overallStatus({ workstream: 'a', phases: [p('complete'), p(null)] })).toBe('complete')
+    expect(overallStatus({ workstream: 'a', phases: [p('complete'), p('notStarted')] })).toBe('onTrack')
+    expect(overallStatus({ workstream: 'a', phases: [p(null)] })).toBe('notStarted')
   })
 })

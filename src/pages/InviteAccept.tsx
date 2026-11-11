@@ -54,7 +54,7 @@ export default function InviteAccept() {
   }
 
   return (
-    <AuthShell title="You've been invited" subtitle={`${invite.invitedBy} invited you to the UST × Premera Engagement Portal.`}>
+    <AuthShell title="You've been invited" subtitle={`${invite.invitedBy} invited you to the UST × Premera Transition Summary Portal.`}>
       <dl className="text-sm space-y-2 mb-5">
         <div className="flex justify-between gap-4"><dt className="text-slate-500">Email</dt><dd className="font-medium text-slate-800">{invite.email}</dd></div>
         <div className="flex justify-between gap-4"><dt className="text-slate-500">Access level</dt><dd className="font-medium text-slate-800">{invite.roleLabel}</dd></div>

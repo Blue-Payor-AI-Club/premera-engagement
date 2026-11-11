@@ -11,6 +11,8 @@ import { AddButton, EditButton, useEditor } from '../Editor'
 import { phaseMilestones, phaseRequest, raidRequest, transitionHeaderRequest, transitionWorkstreamRequest } from '../../lib/editRequests'
 import OverdueTag from '../OverdueTag'
 import DataGrid, { Clamp, FullList } from '../DataGrid'
+import LegacyDashboard from './LegacyDashboard'
+import { raidDone, sameName } from '../../lib/programTabs'
 import { dateColumn, editColumn, renderColumn, statusColumn } from '../gridColumns'
 
 // The Transition Dashboard (Neeta's review, 2026-11-11): each workstream is a heading, its rows
@@ -174,9 +176,10 @@ function PhaseCards({ data, workstreams }: { data: TransitionData; workstreams: 
   )
 }
 
-function WorkstreamDashboard({ data }: { data: TransitionData }) {
+/** All workstreams with a filter, or just `index` (a Program Level tab). */
+export function WorkstreamDashboard({ data, index }: { data: TransitionData; index?: number }) {
   const [only, setOnly] = useState('')
-  const all = useMemo<Shown>(() => data.dashboard.map((w, wi) => ({ w, wi })), [data.dashboard])
+  const all = useMemo<Shown>(() => data.dashboard.map((w, wi) => ({ w, wi })).filter(({ wi }) => index === undefined || wi === index), [data.dashboard, index])
   // A filter left on a workstream that was since renamed or removed shows everything again.
   const shown = useMemo(() => (all.some(({ w }) => w.workstream === only) ? all.filter(({ w }) => w.workstream === only) : all), [all, only])
   // Only one layout is mounted: every thumbs control fetches its vote, and the hidden phone cards
@@ -184,7 +187,7 @@ function WorkstreamDashboard({ data }: { data: TransitionData }) {
   const phone = useMediaQuery('(max-width: 639.95px)')
   return (
     <>
-      {data.dashboard.length > 1 && (
+      {index === undefined && data.dashboard.length > 1 && (
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
           <label htmlFor="ws-filter" className="text-xs font-semibold text-slate-500 shrink-0">Workstream</label>
           <select id="ws-filter" value={only} onChange={(e) => setOnly(e.target.value)} className="text-sm border border-slate-200 rounded px-2 py-1 min-w-0 max-w-full">
@@ -194,13 +197,12 @@ function WorkstreamDashboard({ data }: { data: TransitionData }) {
         </div>
       )}
       {phone ? <PhaseCards data={data} workstreams={shown} /> : <PhaseGrid data={data} workstreams={shown} />}
-      <div className="p-2"><AddButton request={() => transitionWorkstreamRequest(data)}>Add workstream</AddButton></div>
+      {index === undefined && <div className="p-2"><AddButton request={() => transitionWorkstreamRequest(data)}>Add workstream</AddButton></div>}
     </>
   )
 }
 
 type RaidRow = RaidItem & { id: string; index: number }
-const raidDone = (r: RaidItem) => r.status === 'Closed' || r.status === 'Mitigated'
 
 const RAID_WORD: Record<RaidItem['type'], string> = { R: 'Risk', A: 'Assumption', I: 'Issue', D: 'Dependency' }
 
@@ -230,10 +232,12 @@ function RaidCards({ data, rows }: { data: TransitionData; rows: RaidRow[] }) {
   )
 }
 
-function RaidGrid({ data }: { data: TransitionData }) {
+/** The RAID log; with `workstream`, only that workstream's items (a Program Level tab). */
+export function RaidGrid({ data, workstream }: { data: TransitionData; workstream?: string }) {
   const canEdit = !!useEditor()
   const phone = useMediaQuery('(max-width: 639.95px)')
-  const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, id: String(index), index })), [data.raid])
+  const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, id: String(index), index }))
+    .filter((r) => workstream === undefined || sameName(r.workstream, workstream)), [data.raid, workstream])
   const columns = useMemo<ColDef<RaidRow>[]>(() => [
     renderColumn<RaidRow>({ headerName: 'RAID', width: 80, cellClass: 'flex items-center justify-center font-semibold' }, (r) => r.type),
     renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 190 }, (r) => (
@@ -246,7 +250,8 @@ function RaidGrid({ data }: { data: TransitionData }) {
     ...editColumn<RaidRow>(canEdit, (r) => raidRequest(data, r.index), () => 'Edit RAID item'),
   ], [canEdit, data])
 
-  if (phone) return <><RaidCards data={data} rows={rows} /><div className="p-2"><AddButton request={() => raidRequest(data)}>Add RAID item</AddButton></div></>
+  const add = <div className="p-2"><AddButton request={() => raidRequest(data, undefined, workstream)}>Add RAID item</AddButton></div>
+  if (phone) return <><RaidCards data={data} rows={rows} />{add}</>
   return (
     <>
       <DataGrid<RaidRow>
@@ -269,11 +274,12 @@ function RaidGrid({ data }: { data: TransitionData }) {
           actions: <EditButton className="" title="Edit RAID item" request={() => raidRequest(data, r.index)} />,
         })}
       />
-      <div className="p-2"><AddButton request={() => raidRequest(data)}>Add RAID item</AddButton></div>
+      {add}
     </>
   )
 }
 
+/** The Transition Summary Report's dashboard: the pre-phase slide layout, then the full RAID log. */
 export default function TransitionDashboard({ data }: { data: TransitionData }) {
   return (
     <section className="space-y-4" aria-label="Transition Program Dashboard">
@@ -292,7 +298,7 @@ export default function TransitionDashboard({ data }: { data: TransitionData }) 
       </div>
 
       <div className="card overflow-hidden">
-        <WorkstreamDashboard data={data} />
+        <LegacyDashboard data={data} />
       </div>
       <div className="card overflow-hidden">
         <RaidGrid data={data} />

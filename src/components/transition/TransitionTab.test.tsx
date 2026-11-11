@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TransitionTab from './TransitionTab'
+import { WorkstreamDashboard } from './TransitionDashboard'
 import { TRANSITION_DATA } from '../../data/transitionData'
 import { AuthStub } from '../../test/auth'
 
@@ -48,7 +49,7 @@ describe('Transition tab — Executive Summary', () => {
   })
 })
 
-describe('Transition tab — Dashboard', () => {
+describe('Transition Summary Report — dashboard in the old format', () => {
   it('comes after the Executive Summary', () => {
     render(<TransitionTab />)
     const summary = screen.getByRole('region', { name: /executive summary/i, hidden: true })
@@ -56,63 +57,15 @@ describe('Transition tab — Dashboard', () => {
     expect(summary.compareDocumentPosition(dashboard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  // The dashboard is an AG Grid (rendered asynchronously, so these wait with findBy).
-  const grid = () => screen.getByRole('region', { name: /workstream dashboard/i })
-  /** Every cell of the grid row containing `text` (pinned columns render in a separate container). */
-  const rowCells = async (text: string) => {
-    const cell = (await within(grid()).findAllByText(text)).find((el) => el.closest('[row-index]'))!
-    const index = cell.closest('[row-index]')!.getAttribute('row-index')
-    return Array.from(grid().querySelectorAll(`[row-index="${index}"]`)) as HTMLElement[]
-  }
-  const textOf = (els: HTMLElement[]) => els.map((e) => e.textContent).join(' | ')
-
-  it('has one row per phase under each workstream heading: Phase, Status, Start, End, Milestones, Feedback', async () => {
+  it('has the slide columns: Tower, Workstream, Discovery / Planning / Onboarding, Transition, Notes', async () => {
     render(<TransitionTab />)
-    for (const label of ['Phase', 'Status', 'Start', 'End', 'Milestones', 'Feedback']) {
-      expect(await within(grid()).findByText(label, { selector: '.ag-header-cell-text' })).toBeInTheDocument()
+    const grid = screen.getByRole('region', { name: /workstream dashboard/i })
+    for (const label of ['Tower', 'Workstream', 'SOW Submit', 'SOW Approval', 'Onboarding', 'Go-Live', 'Notes']) {
+      expect(await within(grid).findByText(label, { selector: '.ag-header-cell-text' })).toBeInTheDocument()
     }
-    // No tower level and no grouped "Discovery / Planning / Onboarding" header any more.
-    expect(within(grid()).queryByText('Tower', { selector: '.ag-header-cell-text' })).toBeNull()
-    expect(grid().querySelector('.ag-header-group-text')).toBeNull()
-  })
-
-  it('shows every workstream as a heading, each with its phases', async () => {
-    render(<TransitionTab />)
-    for (const w of TRANSITION_DATA.dashboard) expect((await within(grid()).findAllByText(w.workstream)).length).toBeGreaterThan(0)
-    expect(within(grid()).getAllByText('Reverse Shadow').length).toBe(TRANSITION_DATA.dashboard.length)
-  })
-
-  it('a phase row shows its status, dates and milestone count', async () => {
-    render(<TransitionTab />)
-    const cells = await rowCells('Discovery & Planning')
-    expect(textOf(cells)).toMatch('At Risk')
-    expect(textOf(cells)).toMatch('9/16/2026')
-    expect(textOf(cells)).toMatch('2 milestones ›')
-  })
-
-  it('shows N/A for a phase that is not set, and the red call-to-action note on its phase', async () => {
-    render(<TransitionTab />)
-    expect(textOf(await rowCells('Steady State'))).toMatch('N/A')
-    expect((await within(grid()).findByText(/Process an on-boarding SOW for the team/)).className).toMatch('text-red-600')
-  })
-
-  it('narrows to one workstream from the filter', async () => {
-    const user = userEvent.setup()
-    render(<TransitionTab />)
-    await user.selectOptions(screen.getByLabelText('Workstream'), 'Claims Operations')
-    await within(grid()).findAllByText('Claims Operations')
-    expect(within(grid()).queryByText('Service Desk and ITOC')).toBeNull()
-    expect(within(grid()).getAllByText('Reverse Shadow')).toHaveLength(1)
-  })
-
-  it('opens a phase with its own milestones', async () => {
-    const user = userEvent.setup()
-    render(<TransitionTab />)
-    await user.click((await within(grid()).findAllByText('Discovery & Planning'))[0])
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('MSA')).toBeInTheDocument()
-    expect((await within(dialog).findAllByText('SOW submitted')).length).toBeGreaterThan(0)
-    expect(within(dialog).getAllByText('SOW approved').length).toBeGreaterThan(0)
+    expect(within(grid).getByText('Discovery / Planning / Onboarding')).toBeInTheDocument()
+    expect((await within(grid).findAllByText('Customer Service & Platform Engineering')).length).toBe(1) // one merged tower cell
+    expect(within(grid).getAllByText('Service Desk and ITOC').length).toBeGreaterThan(0)
   })
 
   it('shows the AS OF date and the RAID log', async () => {
@@ -124,5 +77,73 @@ describe('Transition tab — Dashboard', () => {
     }
     expect(await within(raid).findByText('Jobin Kuriakose')).toBeInTheDocument()
     expect(within(raid).getByText(/Finalize the SLA approach with Premera/)).toBeInTheDocument()
+  })
+})
+
+describe('Phase dashboard (one Program Level tab, or all workstreams)', () => {
+  // The dashboard is an AG Grid (rendered asynchronously, so these wait with findBy).
+  const grid = () => screen.getByRole('region', { name: /workstream dashboard/i })
+  /** Every cell of the grid row containing `text` (pinned columns render in a separate container). */
+  const rowCells = async (text: string) => {
+    const cell = (await within(grid()).findAllByText(text)).find((el) => el.closest('[row-index]'))!
+    const index = cell.closest('[row-index]')!.getAttribute('row-index')
+    return Array.from(grid().querySelectorAll(`[row-index="${index}"]`)) as HTMLElement[]
+  }
+  const textOf = (els: HTMLElement[]) => els.map((e) => e.textContent).join(' | ')
+
+  it('has one row per phase under each workstream heading: Phase, Status, Start, End, Milestones, Feedback', async () => {
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    for (const label of ['Phase', 'Status', 'Start', 'End', 'Milestones', 'Feedback']) {
+      expect(await within(grid()).findByText(label, { selector: '.ag-header-cell-text' })).toBeInTheDocument()
+    }
+    // No tower level and no grouped "Discovery / Planning / Onboarding" header any more.
+    expect(within(grid()).queryByText('Tower', { selector: '.ag-header-cell-text' })).toBeNull()
+    expect(grid().querySelector('.ag-header-group-text')).toBeNull()
+  })
+
+  it('shows every workstream as a heading, each with its phases', async () => {
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    for (const w of TRANSITION_DATA.dashboard) expect((await within(grid()).findAllByText(w.workstream)).length).toBeGreaterThan(0)
+    expect(within(grid()).getAllByText('Reverse Shadow').length).toBe(TRANSITION_DATA.dashboard.length)
+  })
+
+  it('a phase row shows its status, dates and milestone count', async () => {
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    const cells = await rowCells('Discovery & Planning')
+    expect(textOf(cells)).toMatch('At Risk')
+    expect(textOf(cells)).toMatch('9/16/2026')
+    expect(textOf(cells)).toMatch('2 milestones ›')
+  })
+
+  it('shows N/A for a phase that is not set, and the red call-to-action note on its phase', async () => {
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    expect(textOf(await rowCells('Steady State'))).toMatch('N/A')
+    expect((await within(grid()).findByText(/Process an on-boarding SOW for the team/)).className).toMatch('text-red-600')
+  })
+
+  it('narrows to one workstream from the filter', async () => {
+    const user = userEvent.setup()
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    await user.selectOptions(screen.getByLabelText('Workstream'), 'Claims Operations')
+    await within(grid()).findAllByText('Claims Operations')
+    expect(within(grid()).queryByText('Service Desk and ITOC')).toBeNull()
+    expect(within(grid()).getAllByText('Reverse Shadow')).toHaveLength(1)
+  })
+
+  it('opens a phase with its own milestones', async () => {
+    const user = userEvent.setup()
+    render(<WorkstreamDashboard data={TRANSITION_DATA} />)
+    await user.click((await within(grid()).findAllByText('Discovery & Planning'))[0])
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('MSA')).toBeInTheDocument()
+    expect((await within(dialog).findAllByText('SOW submitted')).length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText('SOW approved').length).toBeGreaterThan(0)
+  })
+
+  it('shows just one workstream, with no filter, when given its index', async () => {
+    render(<WorkstreamDashboard data={TRANSITION_DATA} index={1} />)
+    expect((await within(grid()).findAllByText(TRANSITION_DATA.dashboard[1].workstream)).length).toBeGreaterThan(0)
+    expect(within(grid()).getAllByText('Reverse Shadow')).toHaveLength(1)
+    expect(screen.queryByLabelText('Workstream')).toBeNull()
   })
 })

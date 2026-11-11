@@ -10,8 +10,8 @@ export interface NavItem {
 /** The three sections every signed-in user sees. */
 export const PRIMARY_NAV: NavItem[] = [
   { to: '/program', label: 'Program Level' },
-  { to: '/risks', label: 'Risks & Issues' },
   { to: '/feedback', label: 'Feedback to UST' },
+  { to: '/report', label: 'Transition Summary Report' },
 ]
 
 /** Management links, shown only to roles that hold the permission. UI gating only —

@@ -13,7 +13,7 @@ async function managementLinks(page: Page) {
 
 test('Premera stakeholder sees only the three main sections', async ({ page, request }) => {
   await signInAs(page, request, USERS.premera)
-  for (const label of ['Program Level', 'Risks & Issues', 'Feedback to UST']) {
+  for (const label of ['Program Level', 'Feedback to UST', 'Transition Summary Report']) {
     await expect(page.getByRole('link', { name: label }).first()).toBeVisible()
   }
   expect(await managementLinks(page)).toEqual([])

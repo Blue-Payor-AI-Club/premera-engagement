@@ -169,8 +169,11 @@ interface TransitionBlock {      // rows carry no ids (nothing here is quick-fee
     risks: string[]
     executiveFocus: string[]
   }
-  dashboard: {                   // one entry per workstream, in display order (no tower level)
+  dashboard: {                   // one entry per workstream, in display order; each is a Program Level tab
     workstream: string
+    tower?: string               // pre-phase slide group; only the Transition Summary Report shows it
+    status?: StatusKey | null    // the tab's overall status; unset = derived from the phases
+    summary?: string             // the tab's overall status text
     phases: {                    // Discovery & Planning, Onboarding, Transition / KT, Shadow, Reverse Shadow, Steady State
       id: string                 // stable; thumbs feedback is keyed by it
       phase: string
@@ -182,7 +185,7 @@ interface TransitionBlock {      // rows carry no ids (nothing here is quick-fee
       needsPremeraAttention?: boolean
     }[]
   }[]
-  raid: { type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string }[]
+  raid: { type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string; workstream?: string }[]  // workstream = its Program Level tab; blank = program-wide
 }
 ```
 
@@ -191,7 +194,8 @@ fills in the default, and every `GET /v1/portal` response includes it. It is edi
 `TransitionContacts`, `TransitionSummary`, `TransitionPhases`, `TransitionMilestones` and `TransitionRaid` sheets plus three `Meta` rows
 (`Transition As-Of Date`, `Transition Overall Status`, `Transition Overall Summary`). Those sheets and Meta rows are
 optional on import: a workbook without them keeps the stored Transition data and returns an
-`OPTIONAL_SHEET_MISSING` warning per absent sheet. (A workbook from before the phase layout has a
+`OPTIONAL_SHEET_MISSING` warning per absent sheet. `TransitionPhases` carries the workstream-level `Tower`,
+`Overall Status` and `Overall Status Summary` columns (filled on a workstream's first row); `TransitionRaid` has a `Workstream` column. (A workbook from before the phase layout has a
 `TransitionDashboard` sheet instead of `TransitionPhases`; it is ignored and the stored dashboard kept.)
 
 ### Status enum reference (`src/data/status.ts`)

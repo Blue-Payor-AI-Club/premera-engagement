@@ -10,7 +10,7 @@ export default function UstViewNotice() {
   const canEdit = useContext(AuthContext)?.canEdit ?? false
   const portal = useContext(PortalDataContext)
   const { pathname } = useLocation()
-  if (!canEdit || !(pathname.startsWith('/program') || pathname.startsWith('/risks'))) return null
+  if (!canEdit || !(pathname.startsWith('/program') || pathname.startsWith('/report'))) return null
   const toggle = (
     <button
       type="button"

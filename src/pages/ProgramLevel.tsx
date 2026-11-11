@@ -1,429 +1,150 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import type { ColDef } from 'ag-grid-community'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import { Share2, ChevronDown, ChevronRight, AlertTriangle, Flag, Download, Search } from 'lucide-react'
-import MilestoneTable from '../components/MilestoneTable'
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { AlertTriangle } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
 import Legend from '../components/Legend'
-import TransitionTab from '../components/transition/TransitionTab'
-import { TRANSITION_DATA } from '../data/transitionData'
-import StatusDot from '../components/StatusDot'
-import StatusLabel from '../components/StatusLabel'
-import QuickFeedback from '../components/QuickFeedback'
-import VisibleToPremera from '../components/VisibleToPremera'
-import DataGrid, { Clamp, FullList } from '../components/DataGrid'
-import { editColumn, renderColumn, statusColumn } from '../components/gridColumns'
-import { usePortalData, useUstView } from '../context/PortalDataContext'
+import StatusChip from '../components/transition/StatusChip'
+import { RaidGrid, WorkstreamDashboard } from '../components/transition/TransitionDashboard'
+import { PROGRAM_TABS, overallStatus, raidDone, sameName, statusCounts, tabWorkstream } from '../lib/programTabs'
+import { AddButton, EditButton } from '../components/Editor'
+import { TRANSITION_DATA, type TransitionData, type TransitionWorkstream } from '../data/transitionData'
+import { LEGEND_ORDER, STATUS } from '../data/status'
+import { usePortalData } from '../context/PortalDataContext'
 import { isOverdue } from '../lib/format'
-import type { WorkstreamIcon, Workstream, IssueRow } from '../data/portalData'
-import { WORKSTREAM_ICON_COMPONENTS, WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
-import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
-import { downloadCsv, yesNo } from '../lib/csv'
-import { AddButton, EditButton, useEditor } from '../components/Editor'
-import { Button } from '../components/ui/button'
-import { Input, Select } from '../components/ui/input'
-import {
-  programHeaderRequest, programMilestones, transitionHeaderRequest, workstreamMilestones, workstreamRequest,
-} from '../lib/editRequests'
+import { transitionHeaderRequest, transitionWorkstreamRequest } from '../lib/editRequests'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// Program Level (Neeta's review, set 1, 2026-11-11): one tab per operational area, each showing
+// that area's KPIs, title card, phase dashboard and RAID log. The program-wide executive summary
+// and old-format dashboard moved to the Transition Summary Report (/report).
 
-const ICONS = WORKSTREAM_ICON_COMPONENTS
-
-const isAtRisk = (s: string) => s === 'atRisk' || s === 'delayed'
-
-type ProgramTab = 'ito' | 'bpo' | 'transition'
-const PROGRAM_TABS: ProgramTab[] = ['ito', 'bpo', 'transition']
-
-const TAB_META: Record<ProgramTab, { short: string; full: string }> = {
-  ito: { short: 'ITO', full: 'Infrastructure & Technology Operations' },
-  bpo: { short: 'BPO', full: 'Business Process Operations' },
-  transition: { short: 'Transition', full: 'Executive Summary & Dashboard' },
-}
-
-const milestoneCount = (w: Workstream) => (w.milestones ?? []).reduce((n, sec) => n + sec.rows.length, 0)
-
-// ─── Shared helpers ───────────────────────────────────────────────────────────
-
-function ExpandMoreIcon({ sx }: { sx?: { color?: string; fontSize?: number } }) {
-  return <ChevronDown size={sx?.fontSize ?? 18} color={sx?.color ?? '#94a3b8'} />
-}
-
-function WsIcon({ icon }: { icon: WorkstreamIcon }) {
-  const Icon = ICONS[icon] ?? Share2
+function KpiCards({ w }: { w: TransitionWorkstream | undefined }) {
+  const counts = statusCounts(w)
   return (
-    <span title={WORKSTREAM_ICON_LABELS[icon] ?? icon} className="shrink-0 inline-flex">
-      <Icon size={18} className="text-slate-500" />
-    </span>
-  )
-}
-
-function Bullets({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-1 text-sm text-slate-700">
-      {items.map((t, i) => (
-        <li key={i} className="flex gap-2">
-          <span className="text-slate-400">•</span>
-          <span>{t}</span>
-        </li>
+    <div data-tour="scorecard" aria-label="Status counts" role="group" className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+      {LEGEND_ORDER.map((k) => (
+        <div key={k} className="rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3 border-l-4" style={{ borderLeftColor: STATUS[k].color }}>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{STATUS[k].label}</div>
+          <div className="text-2xl font-bold text-slate-800" aria-label={`${STATUS[k].label}: ${counts[k]}`}>{counts[k]}</div>
+        </div>
       ))}
-    </ul>
-  )
-}
-
-function HealthScorecard({ workstreams }: { workstreams: Workstream[] }) {
-  const total = workstreams.length
-  // Premera's document only holds the areas shared with them; say so rather than imply it's the whole program.
-  const shared = !useUstView()
-  const counts = workstreams.reduce<Record<string, number>>((acc, ws) => {
-    acc[ws.status] = (acc[ws.status] ?? 0) + 1
-    return acc
-  }, {})
-
-  return (
-    <div data-tour="scorecard" className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 rounded-lg border border-slate-200 bg-white shadow-sm">
-      <span className="text-lg font-bold text-slate-500 tracking-wide">
-        Program Scorecard : {total} Operational Area{total === 1 ? '' : 's'}{shared && ' shared with you'}
-      </span>
-      {/* One pill per status, zeros included, so the pills add up to the total. */}
-      <div className="flex flex-wrap gap-2 ml-auto">
-        {LEGEND_ORDER.map((k) => (
-          <div key={k} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: STATUS[k].color }} />
-            <span className="text-xs font-semibold text-slate-700">{STATUS[k].label}: {counts[k] ?? 0}</span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
 
-function RisksSection({ issues, division }: { issues: IssueRow[]; division: 'ito' | 'bpo' }) {
-  const atRiskCount = issues.filter(r => isAtRisk(r.status)).length
-  // Of the open (at-risk/delayed) items listed below, those flagged for Premera.
-  const premeraCount = issues.filter(r => isAtRisk(r.status) && r.premeraActionRequired).length
-  const overdueCount = issues.filter((r) => isOverdue(r.date, r.status === 'complete')).length
-  if (atRiskCount === 0 && overdueCount === 0) return null
+function RiskBadges({ data, name }: { data: TransitionData; name: string | undefined }) {
+  const items = name ? data.raid.filter((r) => sameName(r.workstream, name)) : []
+  const open = items.filter((r) => (r.type === 'R' || r.type === 'I') && !raidDone(r)).length
+  const overdue = items.filter((r) => isOverdue(r.dueDate, raidDone(r))).length
+  if (!open && !overdue) return null
+  const toRaid = () => document.getElementById('tab-raid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Link to={`/risks?division=${division}`} title="Open these in Risks & Issues" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 border border-amber-200 w-full sm:w-auto hover:bg-amber-200 transition">
-          <AlertTriangle size={13} className="text-amber-500 shrink-0" />
-          <span className="text-xs font-semibold text-amber-800">
-            Risks &amp; Issues: <span className="text-amber-600">{atRiskCount}</span>
-          </span>
-        </Link>
-        {overdueCount > 0 && (
-          <Link to={`/risks?division=${division}&overdue=1`} title="Open the overdue items in Risks & Issues" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 w-full sm:w-auto hover:bg-red-700 transition">
-            <AlertTriangle size={13} className="text-white shrink-0" />
-            <span className="text-xs font-semibold text-white">Overdue: {overdueCount}</span>
-          </Link>
-        )}
-        {premeraCount > 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-100 border border-red-200 w-full sm:w-auto">
-            <Flag size={13} className="text-red-500 shrink-0" />
-            <span className="text-xs font-semibold text-red-800">
-              Attention required from Premera: <span className="text-red-600">{premeraCount}</span>
+    <div className="flex flex-col sm:flex-row gap-2 mb-4">
+      <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 border border-amber-200 hover:bg-amber-200 transition">
+        <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+        <span className="text-xs font-semibold text-amber-800">Risks &amp; Issues: <span className="text-amber-600">{open}</span></span>
+      </button>
+      {overdue > 0 && (
+        <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 hover:bg-red-700 transition">
+          <AlertTriangle size={13} className="text-white shrink-0" />
+          <span className="text-xs font-semibold text-white">Overdue: {overdue}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function TabContent({ data, tab, index }: { data: TransitionData; tab: string; index: number }) {
+  const w = data.dashboard[index]
+  if (!w) {
+    return (
+      <div className="card px-4 py-8 text-center space-y-3">
+        <p className="text-sm text-slate-500">Nothing shared for {tab} yet.</p>
+        <AddButton request={() => transitionWorkstreamRequest(data, undefined, tab)}>{`Add ${tab}`}</AddButton>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-6">
+      <section className="card overflow-hidden" aria-label={`Transition Program Summary - ${tab}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-[#0b3a53] text-white">
+          <h2 className="text-lg sm:text-xl font-semibold tracking-tight">Transition Program Summary - {tab}</h2>
+          <span className="flex items-center gap-2">
+            <StatusChip status={overallStatus(w)} />
+            <span className="[&_button]:text-white/80 [&_button:hover]:text-[#0b3a53]">
+              <EditButton title={`Edit ${tab} overall status`} request={() => transitionWorkstreamRequest(data, index)} />
             </span>
-          </div>
-        )}
-      </div>
-      <Link
-        to="/risks"
-        className="inline-flex items-center gap-1 text-xs font-semibold text-[#0067b1] hover:text-[#0056a0] transition self-end sm:self-auto"
-      >
-        View all <ChevronRight size={13} />
-      </Link>
+          </span>
+        </div>
+        <div className="px-4 sm:px-6 py-4">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-[#0b2a4a] mb-2">Overall Status</h3>
+          {w.summary
+            ? <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{w.summary}</p>
+            : <p className="text-sm text-slate-400 italic">Nothing shared in this section yet.</p>}
+        </div>
+      </section>
+
+      <section className="space-y-4" aria-label="Transition Program Dashboard">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#0b3a53] text-white px-4 sm:px-6 py-4">
+          <h2 className="text-lg sm:text-xl font-semibold tracking-tight">Transition Program Dashboard</h2>
+          <span className="rounded-full bg-[#0ea5e9] px-4 py-1 text-right leading-tight">
+            <span className="block text-[10px] tracking-widest font-semibold text-white/90">AS OF:</span>
+            <span className="block text-sm font-semibold">{data.asOf}</span>
+          </span>
+        </div>
+        <div data-tour="workstream-grid" className="card overflow-hidden">
+          <WorkstreamDashboard data={data} index={index} />
+        </div>
+        <div id="tab-raid" className="card overflow-hidden scroll-mt-20">
+          <RaidGrid data={data} workstream={w.workstream} />
+        </div>
+      </section>
     </div>
   )
 }
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProgramLevel() {
   const { data } = usePortalData()
-  const navigate = useNavigate()
-  const [tab, setTab] = useState<ProgramTab>('ito')
-  // The ITO/BPO division whose data the grid/scorecard use. Stays put while the Transition
-  // tab (which has its own content) is open, so switching back restores the same view.
-  const [division, setDivision] = useState<'ito' | 'bpo'>('ito')
-  const canEdit = !!useEditor()
-  const p = data.program[division]
-  const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'' | StatusKey>('')
-  // The grid and the phone list show the filtered workstreams; the scorecard stays on all of them.
-  const q = query.trim().toLowerCase()
-  // Memoized: a new array on every render would make AG-Grid rebuild its cells, which unmounts an
-  // open thumbs-down popup mid-click.
-  const workstreams = useMemo(() => p.workstreams.filter((w) =>
-    (!q || [w.name, w.statusMessage ?? '', ...w.accomplishments, ...w.activities].some((t) => t.toLowerCase().includes(q))) &&
-    (!statusFilter || w.status === statusFilter)), [p.workstreams, q, statusFilter])
-  const isTransition = tab === 'transition'
   // Synced from the workbook; the bundled copy only covers an API that predates the block.
   const transition = data.transition ?? TRANSITION_DATA
-
-  const handleTabChange = useCallback((k: ProgramTab) => {
-    setTab(k)
-    if (k !== 'transition') setDivision(k)
-  }, [])
-
-  const columns = useMemo<ColDef<Workstream>[]>(() => [
-    renderColumn<Workstream>({ headerName: 'Operational Area', flex: 2, minWidth: 180 }, (w) => {
-      const Icon = ICONS[w.icon] ?? Share2
-      return (
-        <div className="flex items-center gap-2 min-w-0">
-          {/* The tooltip names the workbook's Icon value, so a mismatch is easy to spot. */}
-          <span title={WORKSTREAM_ICON_LABELS[w.icon] ?? w.icon} className="shrink-0 inline-flex"><Icon size={18} className="text-slate-500" /></span>
-          <Clamp title={w.name}><span className="font-semibold text-primary">{w.name}</span><VisibleToPremera flagged={w.needsPremeraAttention} /></Clamp>
-        </div>
-      )
-    }),
-    { ...statusColumn<Workstream>('Status', (w) => w.status as StatusKey, 130), tooltipValueGetter: (tp) => tp.data?.statusMessage },
-    renderColumn<Workstream>({ headerName: 'Feedback', width: 100 }, (w) => <QuickFeedback itemId={w.id} itemLabel={w.name} />),
-    renderColumn<Workstream>({ headerName: 'Action Required', width: 120 }, (w) => w.premeraActionRequired && (
-      <button
-        title="View risks & issues requiring Premera attention"
-        onClick={() => navigate('/risks')}
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
-      >
-        <Flag size={12} className="text-red-500" /> View
-      </button>
-    )),
-    { headerName: 'Key Accomplishments', flex: 3, minWidth: 170, valueGetter: (vp) => vp.data?.accomplishments },
-    { headerName: 'Planned Activities', flex: 3, minWidth: 170, valueGetter: (vp) => vp.data?.activities },
-    renderColumn<Workstream>({ headerName: 'Milestones', width: 110 }, (w) => (
-      <span className="text-xs font-semibold text-primary whitespace-nowrap" title="Click the row to see its milestones">
-        {milestoneCount(w)} milestone{milestoneCount(w) === 1 ? '' : 's'} ›
-      </span>
-    )),
-    ...editColumn<Workstream>(canEdit, (w) => workstreamRequest(division, w), (w) => `Edit ${w.name}`),
-  ], [canEdit, division, navigate])
-
-  const details = useCallback((w: Workstream) => ({
-    title: w.name,
-    subtitle: `${TAB_META[division].short} operational area`,
-    fields: [
-      { label: 'Status', value: <StatusLabel status={w.status as StatusKey} /> },
-      { label: 'Status note', value: w.statusMessage || '—' },
-      { label: 'Premera action required', value: w.premeraActionRequired ? 'Yes' : 'No' },
-      ...(canEdit ? [{ label: 'Premera can see it', value: w.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
-      { label: 'Key accomplishments', value: <FullList items={w.accomplishments} /> },
-      { label: 'Planned activities', value: <FullList items={w.activities} /> },
-    ],
-    extra: (
-      <div className="rounded-lg border border-border overflow-hidden">
-        <MilestoneTable
-          headLabel="Key Milestones"
-          statusLabel="Status"
-          sections={w.milestones ?? []}
-          headColor="#dfe3e6"
-          headTextColor="#374151"
-          sectionColor="#f1f5f9"
-          sectionTextColor="#475569"
-          locate={workstreamMilestones(division, w.id)}
-          where={`${division.toUpperCase()} / ${w.name}`}
-        />
-      </div>
-    ),
-    actions: <EditButton className="" title={`Edit ${w.name}`} request={() => workstreamRequest(division, w)} />,
-  }), [canEdit, division])
+  // In the URL, so a reload or a shared link opens the same tab.
+  const [params, setParams] = useSearchParams()
+  const tab = PROGRAM_TABS.find((t) => t === params.get('tab')) ?? PROGRAM_TABS[0]
+  const setTab = (t: string) => setParams({ tab: t }, { replace: true })
+  const index = useMemo(() => tabWorkstream(transition.dashboard, tab), [transition.dashboard, tab])
+  const w = transition.dashboard[index]
 
   return (
     <div className="slide">
       <SlideHeader
-        title={isTransition ? 'Transition Program' : `${p.levelLabel} Highlights`}
+        title="Transition Summary Dashboard"
         sampleLines={[]}
-        asOf={isTransition ? transition.asOf : data.asOf}
-        edit={() => (isTransition ? transitionHeaderRequest(transition) : programHeaderRequest(data, division))}
+        asOf={transition.asOf}
+        edit={() => transitionHeaderRequest(transition)}
       />
 
-      {/* Scorecard and risks summarise the selected ITO/BPO division — not applicable to Transition. */}
-      {!isTransition && <HealthScorecard workstreams={p.workstreams} />}
+      <div className="mb-4"><Legend /></div>
+      <KpiCards w={w} />
+      <RiskBadges data={transition} name={w?.workstream} />
 
-      {!isTransition && <RisksSection issues={p.issues} division={division} />}
-
-      {/* ITO / BPO segmented switcher */}
-      <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1" role="tablist" aria-label="Program division">
-        {PROGRAM_TABS.map((k) => (
+      <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1 overflow-x-auto sm:flex-wrap" role="tablist" aria-label="Operational area">
+        {PROGRAM_TABS.map((t) => (
           <button
-            key={k}
+            key={t}
             role="tab"
-            aria-selected={tab === k}
-            onClick={() => handleTabChange(k)}
-            className={`flex-1 py-2.5 px-4 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 ${
-              tab === k
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`shrink-0 py-2 px-3 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+              tab === t
                 ? 'bg-white shadow-sm text-[#0067b1] ring-1 ring-slate-200/80'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 cursor-pointer'
+                : 'text-slate-600 hover:text-slate-800 hover:bg-white/60 cursor-pointer'
             }`}
           >
-            <span className={`text-sm font-bold tracking-wide ${tab === k ? 'text-[#0067b1]' : 'text-slate-600'}`}>
-              {TAB_META[k].short}
-            </span>
-            <span className={`text-[11px] leading-tight ${tab === k ? 'text-[#0067b1]/70' : 'text-slate-400'}`}>
-              {TAB_META[k].full}
-            </span>
+            {t}
           </button>
         ))}
       </div>
 
-      {isTransition ? <TransitionTab data={transition} /> : (
-      <div className="space-y-6">
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <label className="relative w-full sm:w-64">
-            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-            <Input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search operational areas"
-              aria-label="Search operational areas"
-              className="h-8 pl-7 text-xs"
-            />
-          </label>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            aria-label="Status"
-            className="h-8 w-auto text-xs"
-          >
-            <option value="">Any status</option>
-            {LEGEND_ORDER.map((k) => <option key={k} value={k}>{STATUS[k].label}</option>)}
-          </Select>
-          <AddButton request={() => workstreamRequest(division)}>Add operational area</AddButton>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => downloadCsv(`${division}-program-${new Date().toISOString().slice(0, 10)}.csv`, [
-              ['Operational Area', 'Status', 'Status Note', 'Premera Attention', 'Premera Action Required', 'Key Accomplishments', 'Planned Activities'],
-              ...workstreams.map((w) => [
-                w.name,
-                STATUS[w.status as StatusKey]?.label ?? w.status,
-                w.statusMessage ?? '',
-                yesNo(w.needsPremeraAttention),
-                yesNo(w.premeraActionRequired),
-                w.accomplishments.join('\n'),
-                w.activities.join('\n'),
-              ]),
-            ])}
-            className="sm:ml-auto"
-          >
-            <Download size={12} />
-            Export CSV
-          </Button>
-        </div>
-        {workstreams.length === 0 && (
-          <p className="text-sm text-slate-500 text-center py-6">
-            {p.workstreams.length ? 'No operational areas match these filters.' : 'No operational areas have been shared yet.'}
-          </p>
-        )}
-
-        {/* ── Grid (desktop md+): fixed-height rows; click a row for everything, milestones included ── */}
-        <div data-tour="workstream-grid" className="card overflow-hidden hidden md:block">
-          <DataGrid<Workstream>
-            label="Operational areas"
-            rows={workstreams}
-            columns={columns}
-            rowId={(w) => w.id}
-            rowHeight={68}
-            pageSize={10}
-            details={details}
-            emptyText="No operational areas to show."
-          />
-        </div>
-
-        {/* ── Accordion (mobile <md) ── */}
-        <div className="md:hidden card overflow-hidden">
-          {workstreams.map((w) => (
-            <Accordion
-              key={w.id}
-              disableGutters
-              elevation={0}
-              square
-              sx={{
-                borderBottom: '1px solid #f1f5f9',
-                '&:before': { display: 'none' },
-                '&.Mui-expanded': { margin: 0 },
-              }}
-            >
-              {/* AccordionSummary renders as <button> — keep only non-interactive content here */}
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ color: '#94a3b8' }} />}
-                sx={{
-                  padding: '0 8px 0 12px',
-                  '& .MuiAccordionSummary-content': { margin: '10px 0' },
-                  '&:hover': { background: '#f8fafc' },
-                }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <WsIcon icon={w.icon} />
-                  <span className="font-semibold text-[#0067b1] text-sm leading-snug">{w.name}</span>
-                  <StatusDot status={w.status} />
-                </div>
-              </AccordionSummary>
-
-              <AccordionDetails
-                sx={{ padding: '0 12px 12px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
-              >
-                {/* Status + feedback + action row — interactive elements must be outside AccordionSummary <button> */}
-                <div className="flex items-center justify-between gap-2 pt-2 pb-3">
-                  <div className="flex items-center gap-2">
-                    <StatusDot status={w.status} />
-                    <span className="text-xs font-semibold" style={{ color: STATUS[w.status as StatusKey]?.color }}>
-                      {STATUS[w.status as StatusKey]?.label ?? w.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <VisibleToPremera flagged={w.needsPremeraAttention} />
-                    <EditButton title={`Edit ${w.name}`} request={() => workstreamRequest(division, w)} />
-                    {w.premeraActionRequired && (
-                      <button
-                        onClick={() => navigate('/risks')}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 transition"
-                      >
-                        <Flag size={11} className="text-red-500" />
-                        View Issues
-                      </button>
-                    )}
-                    <QuickFeedback itemId={w.id} itemLabel={w.name} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-500 mb-1">Key Accomplishments</div>
-                    <Bullets items={w.accomplishments} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-slate-500 mb-1">Planned Activities</div>
-                    <Bullets items={w.activities} />
-                  </div>
-                </div>
-                <MilestoneTable
-                  headLabel="Key Milestones"
-                  statusLabel="Status"
-                  sections={w.milestones ?? []}
-                  locate={workstreamMilestones(division, w.id)}
-                  where={`${division.toUpperCase()} / ${w.name}`}
-                />
-              </AccordionDetails>
-            </Accordion>
-          ))}
-        </div>
-
-        <div className="card overflow-hidden">
-          <MilestoneTable headLabel="Key Milestones" statusLabel="Status" sections={p.milestones} locate={programMilestones(division)} where={`${division.toUpperCase()} program`} />
-        </div>
-
-      </div>
-      )}
-
-      <div className="mt-8 flex justify-center md:justify-end">
-        <Legend />
-      </div>
+      <TabContent key={tab} data={transition} tab={tab} index={index} />
     </div>
   )
 }

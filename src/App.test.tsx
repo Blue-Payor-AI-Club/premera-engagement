@@ -8,7 +8,7 @@ import type { Role } from './lib/authApi'
 
 // The pages themselves are covered elsewhere — here we only care which ones are reachable.
 vi.mock('./pages/ProgramLevel', () => ({ default: () => <div>PAGE:program</div> }))
-vi.mock('./pages/Risks', () => ({ default: () => <div>PAGE:risks</div> }))
+vi.mock('./pages/TransitionReport', () => ({ default: () => <div>PAGE:report</div> }))
 vi.mock('./pages/Feedback', () => ({ default: () => <div>PAGE:feedback</div> }))
 vi.mock('./pages/Admin', () => ({ default: () => <div>PAGE:data-sync</div> }))
 vi.mock('./pages/SuperAdmin', () => ({ default: () => <div>PAGE:super-admin</div> }))
@@ -17,7 +17,7 @@ vi.mock('./pages/Login', () => ({ default: () => <div>PAGE:login</div> }))
 vi.mock('./pages/InviteAccept', () => ({ default: () => <div>PAGE:invite</div> }))
 
 function renderAt(path: string, role: Role | null, name?: string) {
-  localStorage.setItem('ustpremera_tour_v2', 'done') // keep the onboarding tour out of the way
+  localStorage.setItem('ustpremera_tour_v3', 'done') // keep the onboarding tour out of the way
   return render(
     <MemoryRouter initialEntries={[path]}>
       <AuthStub role={role} name={name}><App /></AuthStub>
@@ -47,8 +47,9 @@ describe('App shell — navigation by role', () => {
     renderAt('/program', 'premera_stakeholder')
     await openAccountMenu()
     expect(link(/program level/i)).toBeInTheDocument()
-    expect(link(/risks & issues/i)).toBeInTheDocument()
     expect(link(/feedback to ust/i)).toBeInTheDocument()
+    expect(link(/transition summary report/i)).toBeInTheDocument()
+    expect(link(/risks & issues/i)).toBeNull() // now each tab's RAID log
     expect(manage(/data sync/i)).toBeNull()
     expect(manage(/activity/i)).toBeNull()
     expect(manage(/super admin/i)).toBeNull()

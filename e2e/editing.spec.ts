@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { USERS, api, gridRow, loadPortal, signInAs, tokenFor } from './helpers'
+import { SHARED_RAID, UST_RAID, USERS, api, gridRow, loadPortal, signInAs, tokenFor } from './helpers'
 import { API } from '../playwright.config'
 
 // In-app editing (UST only). Each test reloads the demo data so they don't depend on each other.
@@ -7,146 +7,92 @@ test.beforeEach(async ({ request }) => {
   await loadPortal(request)
 })
 
-const RUNBOOKS = /Operational runbooks for Application Support tower \(sections 4–7\) not finalized/
 const dialog = (page: Page) => page.getByRole('dialog')
 
 test.describe('In-app editing', () => {
-  test('UST edits a risk: the change shows at once, survives a reload and is in the Activity log', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/risks')
-    await (await gridRow(page, RUNBOOKS)).getByRole('button', { name: 'Edit risk / issue' }).click()
-    await dialog(page).getByLabel('Risk / Issue').fill('Runbooks edited in the app')
-    await dialog(page).getByLabel('Due').fill('2026-12-01')
+  test("UST edits a tab's RAID item: the change shows at once, survives a reload and is in the Activity log", async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/program')
+    await (await gridRow(page, SHARED_RAID)).getByRole('button', { name: 'Edit RAID item' }).click()
+    await dialog(page).getByLabel('Description').fill('RAID edited in the app')
+    await dialog(page).getByLabel('Due Date').fill('2026-12-01')
     await dialog(page).getByRole('button', { name: 'Save' }).click()
     await expect(dialog(page)).toBeHidden()
-    const edited = page.locator('.ag-row', { hasText: 'Runbooks edited in the app' })
-    await expect(edited).toContainText('12/1/2026')
+    await expect(page.locator('.ag-row', { hasText: 'RAID edited in the app' })).toContainText('12/1/2026')
     await page.reload()
-    await expect(page.locator('.ag-row', { hasText: 'Runbooks edited in the app' })).toBeVisible()
+    await expect(page.locator('.ag-row', { hasText: 'RAID edited in the app' })).toBeVisible()
 
     await page.goto('/activity')
-    await expect(page.getByText(/portal: Edited risk \/ issue/).first()).toBeVisible()
+    await expect(page.getByText(/portal: Edited RAID item/).first()).toBeVisible()
   })
 
   test('required fields and bad dates are refused in the form, nothing is saved', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/risks')
-    await (await gridRow(page, RUNBOOKS)).getByRole('button', { name: 'Edit risk / issue' }).click()
-    await dialog(page).getByLabel('Risk / Issue').fill('')
-    await dialog(page).getByLabel('Due').fill('next week')
+    await signInAs(page, request, USERS.ust, '/program')
+    await (await gridRow(page, SHARED_RAID)).getByRole('button', { name: 'Edit RAID item' }).click()
+    await dialog(page).getByLabel('Description').fill('')
+    await dialog(page).getByLabel('Due Date').fill('next week')
     await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(dialog(page).getByText('Risk / Issue is required.')).toBeVisible()
+    await expect(dialog(page).getByText('Description is required.')).toBeVisible()
     await expect(dialog(page).getByText(/Enter a date as M\/D\/YYYY/)).toBeVisible()
     await dialog(page).getByRole('button', { name: 'Cancel' }).click()
-    await expect(page.locator('.ag-row', { hasText: RUNBOOKS })).toBeVisible()
+    await expect(page.locator('.ag-row', { hasText: SHARED_RAID })).toBeVisible()
   })
 
-  test('add a risk, then add and delete an action on it', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/risks')
-    await page.getByRole('button', { name: 'Add risk / issue' }).click()
-    await dialog(page).getByLabel('Division').selectOption('bpo')
-    await dialog(page).getByLabel('Risk / Issue').fill('E2E new BPO risk')
+  test("a RAID item added on a tab belongs to that tab's workstream", async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/program?tab=Database%20Administration')
+    await page.getByRole('button', { name: 'Add RAID item' }).click()
+    await expect(dialog(page).getByLabel(/^Workstream/)).toHaveValue('Database Administration')
+    await dialog(page).getByLabel('Description').fill('E2E RAID dependency')
+    await dialog(page).getByLabel('RAID').selectOption('D')
     await dialog(page).getByRole('button', { name: 'Save' }).click()
-    const row = page.locator('.ag-row', { hasText: 'E2E new BPO risk' })
-    await expect(row).toBeVisible()
+    await expect(page.locator('.ag-row', { hasText: 'E2E RAID dependency' })).toContainText('D')
+    await page.getByRole('tab', { name: 'Service Desk and ITOC' }).click()
+    await expect(page.getByText('E2E RAID dependency')).toHaveCount(0)
+  })
 
-    await row.getByRole('button', { name: 'Actions' }).click()
-    await page.getByRole('button', { name: 'Add action' }).click()
-    await dialog(page).getByRole('textbox', { name: /^Action/ }).fill('E2E follow-up')
-    await dialog(page).getByLabel('Owner').fill('UST PMO')
+  test("UST sets a tab's overall status and summary from its title card", async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/program?tab=Claims%20Operations%20(100-400)')
+    await page.getByRole('button', { name: 'Edit Claims Operations (100-400) overall status' }).click()
+    await dialog(page).getByLabel(/^Overall Status \(/).selectOption('delayed')
+    await dialog(page).getByLabel('Overall Status Summary').fill('E2E claims summary')
     await dialog(page).getByRole('button', { name: 'Save' }).click()
-    const actions = page.getByRole('dialog')
-    await expect(actions.locator('.ag-row', { hasText: 'E2E follow-up' })).toBeVisible()
-    // Esc on the edit form must not also close the actions window underneath.
-    await (await gridRow(actions, 'E2E follow-up')).getByRole('button', { name: 'Edit action' }).click()
-    await page.keyboard.press('Escape')
-    await expect(page.getByText('Actions & Ownership')).toBeVisible()
-
-    await (await gridRow(actions, 'E2E follow-up')).getByRole('button', { name: 'Edit action' }).click()
-    page.once('dialog', (d) => d.accept())
-    await dialog(page).getByRole('button', { name: 'Delete' }).click()
-    await expect(actions.locator('.ag-row', { hasText: 'E2E follow-up' })).toHaveCount(0)
+    const card = page.getByRole('region', { name: 'Transition Program Summary - Claims Operations (100-400)' })
+    await expect(card).toContainText('Overall: Delayed')
+    await expect(card).toContainText('E2E claims summary')
+    const admin = await tokenFor(request, USERS.super)
+    const doc = await (await api(request, admin, 'GET', '/portal')).json()
+    const claims = doc.transition.dashboard.find((w: { workstream: string }) => w.workstream === 'Claims Operations')
+    expect([claims.status, claims.summary]).toEqual(['delayed', 'E2E claims summary'])
   })
 
   test('someone else saved first: the user is told, the latest data loads, nothing is overwritten', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/risks')
-    await (await gridRow(page, RUNBOOKS)).getByRole('button', { name: 'Edit risk / issue' }).click()
+    await signInAs(page, request, USERS.ust, '/program')
+    await (await gridRow(page, SHARED_RAID)).getByRole('button', { name: 'Edit RAID item' }).click()
 
-    // Meanwhile another UST user changes the As-Of date.
+    // Meanwhile another UST user changes the Transition As-Of date.
     const other = await tokenFor(request, USERS.super)
     const got = await api(request, other, 'GET', '/portal')
     const doc = await got.json()
-    doc.asOf = '1/2/2027'
+    doc.transition.asOf = '1/2/2027'
     const put = await request.fetch(`${API}/portal/edit`, {
       method: 'PUT', data: { data: doc, summary: 'other user' },
       headers: { Authorization: `Bearer ${other}`, 'If-Match': got.headers()['etag'] },
     })
     expect(put.ok()).toBeTruthy()
 
-    await dialog(page).getByLabel('Risk / Issue').fill('My stale edit')
+    await dialog(page).getByLabel('Description').fill('My stale edit')
     await dialog(page).getByRole('button', { name: 'Save' }).click()
     await expect(dialog(page).getByText(/Someone else saved a change/)).toBeVisible()
     await dialog(page).getByRole('button', { name: 'Cancel' }).click()
-    await expect(page.getByText('1/2/2027')).toBeVisible()
+    await expect(page.getByText('1/2/2027').first()).toBeVisible()
     await expect(page.getByText('My stale edit')).toHaveCount(0)
   })
 
-  test('edit an operational area and add a program milestone on Program Level', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/program')
-    const grid = page.locator('[data-tour="workstream-grid"]')
-    await grid.getByRole('button', { name: /^Edit / }).first().click()
-    await dialog(page).getByLabel('Status Note').fill('E2E status note')
-    await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(dialog(page)).toBeHidden()
-    // Reopening starts from the saved row, not the grid's stale copy (which would undo the edit on the next save).
-    await grid.getByRole('button', { name: /^Edit / }).first().click()
-    await expect(dialog(page).getByLabel('Status Note')).toHaveValue('E2E status note')
-    await dialog(page).getByRole('button', { name: 'Cancel' }).click()
-
-    await page.getByRole('button', { name: 'Add milestone', exact: true }).last().click()
-    await dialog(page).getByRole('textbox', { name: /^Milestone/ }).fill('E2E milestone')
-    await dialog(page).getByLabel('Due').fill('TBD')
-    await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByText('E2E milestone').first()).toBeVisible()
-
-    // A workstream's own milestones live in its details popup (click the row).
-    await grid.locator('.ag-row').first().getByText(/milestones? ›/).click()
-    const details = dialog(page)
-    await expect(details.getByText('Key Milestones').first()).toBeVisible()
-    await details.getByRole('button', { name: 'Add milestone', exact: true }).first().click()
-    await dialog(page).getByRole('textbox', { name: /^Milestone/ }).fill('E2E workstream milestone')
-    await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(dialog(page).getByText('E2E workstream milestone').first()).toBeVisible()
-    await page.keyboard.press('Escape')
-
-    const admin = await tokenFor(request, USERS.super)
-    const doc = await (await api(request, admin, 'GET', '/portal')).json()
-    expect(JSON.stringify(doc.program.ito.workstreams[0].milestones)).toContain('E2E workstream milestone')
-    expect(doc.program.ito.workstreams.some((w: { statusMessage?: string }) => w.statusMessage === 'E2E status note')).toBe(true)
-  })
-
-  test('Transition: add a RAID item and edit the header status', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/program')
-    await page.getByRole('tab', { name: /Transition/ }).click()
-    await page.getByRole('button', { name: 'Add RAID item' }).click()
-    await dialog(page).getByLabel('Description').fill('E2E RAID dependency')
-    await dialog(page).getByLabel('RAID').selectOption('D')
-    await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(page.locator('.ag-row', { hasText: 'E2E RAID dependency' })).toContainText('D')
-
-    await page.getByRole('button', { name: 'Edit transition header' }).click()
-    await dialog(page).getByLabel('Transition Overall Status').selectOption('delayed')
-    await dialog(page).getByRole('button', { name: 'Save' }).click()
-    await expect(dialog(page)).toBeHidden()
-    const admin = await tokenFor(request, USERS.super)
-    const doc = await (await api(request, admin, 'GET', '/portal')).json()
-    expect(doc.transition.overallStatus).toBe('delayed')
-  })
-
   test('Premera users get no edit controls, and the edit endpoint refuses them', async ({ page, request }) => {
-    const token = await signInAs(page, request, USERS.premera, '/risks')
-    await expect(page.getByText(/Risks & Issues:/)).toBeVisible()
+    const token = await signInAs(page, request, USERS.premera, '/program')
+    await expect(page.getByText('Service desk KT is on plan.')).toBeVisible()
     await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
-    await page.goto('/program')
-    await expect(page.getByText(/Program Scorecard/)).toBeVisible()
+    await page.goto('/report')
+    await expect(page.getByText('Transition Program Executive Summary')).toBeVisible()
     await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
     const res = await request.fetch(`${API}/portal/edit`, {
       method: 'PUT', data: { data: {}, summary: 'x' }, headers: { Authorization: `Bearer ${token}`, 'If-Match': '"1"' },
@@ -157,27 +103,26 @@ test.describe('In-app editing', () => {
 
 test.describe('Client-facing view', () => {
   test('UST "View as Premera" shows exactly the Premera view, with editing off, and exits cleanly', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust, '/risks')
-    await expect(page.getByText(/Payroll parallel run/).first()).toBeVisible() // UST only
+    await signInAs(page, request, USERS.ust, '/program')
+    await expect(page.getByText(UST_RAID).first()).toBeVisible() // UST only
     await page.getByRole('button', { name: 'View as Premera' }).click()
     await expect(page.getByText('Previewing as Premera.')).toBeVisible()
-    await expect(page.getByText(/Payroll parallel run/)).toHaveCount(0)
-    await expect(page.getByText(RUNBOOKS).first()).toBeVisible() // shared with Premera
+    await expect(page.getByText(UST_RAID)).toHaveCount(0)
+    await expect(page.getByText(SHARED_RAID).first()).toBeVisible() // shared with Premera
     await expect(page.getByRole('button', { name: /^Edit|^Add / })).toHaveCount(0)
     await expect(page.getByText('UST only')).toHaveCount(0)
     await page.getByRole('button', { name: 'Exit preview' }).click()
-    await expect(page.getByText(/Payroll parallel run/).first()).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Add risk / issue' })).toBeVisible()
+    await expect(page.getByText(UST_RAID).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add RAID item' })).toBeVisible()
   })
 
-  test('past-due items are tagged Overdue and counted; Premera sees an honest scorecard and empty-state text', async ({ page, request }) => {
-    await signInAs(page, request, USERS.premera, '/risks')
-    // Demo due dates are June 2026; the summary pill and the row tags must say so.
+  test('past-due RAID items are tagged Overdue and counted; Premera sees empty-state text for areas not shared', async ({ page, request }) => {
+    await signInAs(page, request, USERS.premera, '/program')
+    // The demo RAID due dates are October 2026.
     await expect(page.getByText(/^Overdue: \d+/)).toBeVisible()
     await expect(page.getByText('Overdue', { exact: true }).first()).toBeVisible()
-    await page.goto('/program')
-    await expect(page.getByText(/Operational Areas? shared with you/)).toBeVisible()
-    await expect(page.getByText('Program Level Status Reporting Sample')).toHaveCount(0)
+    await page.getByRole('tab', { name: 'Claims Operations (100-400)' }).click()
+    await expect(page.getByText('Nothing shared for Claims Operations (100-400) yet.')).toBeVisible()
     await expect(page.getByText(/Updated /).first()).toBeVisible()
   })
 })

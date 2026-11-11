@@ -24,7 +24,7 @@ export async function signInAs(page: Page, request: APIRequestContext, who: { em
   await page.addInitScript((t) => {
     sessionStorage.setItem('ustpremera_token', t)
     // Skip the first-run tour in every spec except the tour spec, which clears this.
-    localStorage.setItem('ustpremera_tour_v2', 'done')
+    localStorage.setItem('ustpremera_tour_v3', 'done')
   }, token)
   await page.goto(url)
   return token
@@ -52,11 +52,31 @@ const DEMO = JSON.parse(
 )
 
 /** Replaces the portal document (default: the API's demo dataset — the fresh-database seed is an empty template). */
+/** What the e2e Transition data shares with Premera (the rest is UST only). */
+export const SHARED_RAID = /The projected go-live for Serv/
+export const UST_RAID = /The lead time to do facilities/
+
+/**
+ * Loads the demo document. The demo has no Transition block, so the API serves its default one;
+ * that is then given Premera-visible content on the first Program Level tab (Service Desk and
+ * ITOC): its phases, a summary, one shared RAID item and one UST-only RAID item.
+ */
 export async function loadPortal(request: APIRequestContext, data: unknown = DEMO) {
   const token = await tokenFor(request, USERS.super)
   const res = await api(request, token, 'PUT', '/portal', data)
   expect(res.ok(), await res.text()).toBeTruthy()
-  return res.json()
+  const doc = await (await api(request, token, 'GET', '/portal')).json()
+  const sd = doc.transition.dashboard.find((w: { workstream: string }) => w.workstream === 'Service Desk and ITOC')
+  for (const p of sd.phases) p.needsPremeraAttention = true
+  sd.summary = 'Service desk KT is on plan.'
+  const raid = doc.transition.raid as { description: string; workstream?: string; needsPremeraAttention?: boolean }[]
+  for (const r of raid) {
+    if (SHARED_RAID.test(r.description)) Object.assign(r, { workstream: 'Service Desk and ITOC', needsPremeraAttention: true })
+    if (UST_RAID.test(r.description)) r.workstream = 'Service Desk and ITOC'
+  }
+  const again = await api(request, token, 'PUT', '/portal', doc)
+  expect(again.ok(), await again.text()).toBeTruthy()
+  return again.json()
 }
 
 export const demoData = () => structuredClone(DEMO)

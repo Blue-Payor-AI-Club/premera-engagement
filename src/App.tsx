@@ -1,12 +1,12 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import UstViewNotice from './components/UstViewNotice'
-import { Menu, X, BarChart3, AlertTriangle, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
+import { Menu, X, BarChart3, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
 import './index.css'
 import ProgramLevel from './pages/ProgramLevel'
 import Feedback from './pages/Feedback'
 import Admin from './pages/Admin'
-import Risks from './pages/Risks'
+import TransitionReport from './pages/TransitionReport'
 import SuperAdmin from './pages/SuperAdmin'
 import Activity from './pages/Activity'
 import Login from './pages/Login'
@@ -20,7 +20,7 @@ import { PRIMARY_NAV } from './lib/navigation'
 
 // ─── Tour ─────────────────────────────────────────────────────────────────────
 
-const TOUR_KEY = 'ustpremera_tour_v2'
+const TOUR_KEY = 'ustpremera_tour_v3'
 const CARD_W = 360
 const GAP = 14
 
@@ -34,9 +34,9 @@ const TOUR_STEPS = [
     title: 'Your Navigation',
     body: 'Move between the three main sections of the portal using the menu above.',
     highlights: [
-      { color: '#0067b1', text: 'Program Level — delivery health across all workstreams' },
-      { color: '#f2b705', text: 'Risks & Issues — active blockers and escalations' },
+      { color: '#0067b1', text: 'Program Level — one tab per operational area' },
       { color: '#1aa260', text: 'Feedback to UST — structured stakeholder input channel' },
+      { color: '#f2b705', text: 'Transition Summary Report — the program-wide summary and dashboard' },
     ],
   },
   {
@@ -45,12 +45,12 @@ const TOUR_STEPS = [
     placement: 'bottom' as const,
     icon: <BarChart3 size={20} className="text-[#0067b1]" />,
     label: 'Scorecard',
-    title: 'Program Scorecard',
-    body: 'A live summary of workstream health. Numbers update whenever UST pushes new data.',
+    title: 'Status at a glance',
+    body: "The selected tab's phases and milestones, counted by status. Numbers update whenever UST pushes new data.",
     highlights: [
-      { color: '#1aa260', text: 'On Track — workstreams progressing as planned' },
-      { color: '#f2b705', text: 'At Risk / Delayed — workstreams needing immediate attention' },
-      { color: '#8e44ad', text: 'Complete — workstreams that have fully delivered' },
+      { color: '#1aa260', text: 'On Track — progressing as planned' },
+      { color: '#f2b705', text: 'At Risk / Delayed — needing immediate attention' },
+      { color: '#8e44ad', text: 'Complete — fully delivered' },
     ],
   },
   {
@@ -58,14 +58,13 @@ const TOUR_STEPS = [
     selector: '[data-tour="tab-switcher"]',
     placement: 'bottom' as const,
     icon: <LayoutGrid size={20} className="text-[#0067b1]" />,
-    label: 'ITO, BPO & Transition',
-    title: 'ITO, BPO & Transition',
-    body: 'The engagement is split into two program divisions, plus a Transition view. Click a tab to switch your view.',
+    label: 'Operational areas',
+    title: 'Operational areas',
+    body: 'Each tab is one operational area. Click a tab to switch your view.',
     highlights: [
-      { color: '#0067b1', text: 'ITO — Infrastructure & Technology Operations workstreams' },
-      { color: '#0067b1', text: 'BPO — Business Process Operations workstreams' },
-      { color: '#1aa260', text: 'Each division has its own workstreams, milestones, and issues' },
-      { color: '#0067b1', text: 'Transition — executive summary and dashboard for the transition program' },
+      { color: '#0067b1', text: "Title card — the area's overall status" },
+      { color: '#1aa260', text: 'Dashboard — its phases, dates and milestones' },
+      { color: '#f2b705', text: 'RAID log — its risks, assumptions, issues and dependencies' },
     ],
   },
   {
@@ -74,26 +73,11 @@ const TOUR_STEPS = [
     placement: 'top' as const,
     icon: <BarChart3 size={20} className="text-[#0067b1]" />,
     label: 'Workstreams',
-    title: 'Workstream Table',
-    body: 'Each row is a workstream. Expand it to see milestones. Flag concerns inline with thumbs up / down.',
+    title: 'Phase dashboard',
+    body: 'Each row is a phase. Click it to see its milestones. Flag concerns inline with thumbs up / down.',
     highlights: [
-      { color: '#0067b1', text: 'Click ▸ on any row to expand key milestones with dates and RAG status' },
-      { color: '#ef4444', text: '"View" button appears on rows needing Premera action — links to Risks page' },
+      { color: '#0067b1', text: 'Click any row for its dates, notes and milestones' },
       { color: '#f2b705', text: 'Thumbs down — capture a concern inline; it goes straight to the team' },
-    ],
-  },
-  {
-    page: '/risks',
-    selector: '[data-tour="risks-summary"]',
-    placement: 'bottom' as const,
-    icon: <AlertTriangle size={20} className="text-amber-500" />,
-    label: 'Risks',
-    title: 'Risks & Issues',
-    body: 'A focused view of every active blocker and escalation across both program divisions.',
-    highlights: [
-      { color: '#ef4444', text: '"Premera Action Required" — items waiting for your input or sign-off' },
-      { color: '#f2b705', text: 'Priority badges — Critical, High, Medium, Low at a glance' },
-      { color: '#0067b1', text: 'Click any row — see the full risk action log and owner history' },
     ],
   },
   {
@@ -363,7 +347,7 @@ function TopBar() {
             <img src="/pbc_logo.svg" alt="Premera Blue Cross" className="h-6 w-auto max-w-[110px] object-contain" />
           </div>
           <div className="ml-1 leading-tight hidden lg:block">
-            <div className="text-sm font-bold text-slate-800">Engagement Portal</div>
+            <div className="text-sm font-bold text-slate-800">Transition Summary Portal</div>
             <div className="text-[11px] text-slate-400">UST · Premera Blue Cross</div>
           </div>
         </div>
@@ -450,8 +434,10 @@ function AuthenticatedApp() {
         <Routes>
           <Route path="/" element={<Navigate to="/program" replace />} />
           <Route path="/program" element={<PortalGate><ProgramLevel /></PortalGate>} />
-          <Route path="/risks" element={<PortalGate><Risks /></PortalGate>} />
+          {/* Risks & Issues is now each Program Level tab's RAID log; old links land there. */}
+          <Route path="/risks" element={<Navigate to="/program" replace />} />
           <Route path="/feedback" element={<Feedback />} />
+          <Route path="/report" element={<PortalGate><TransitionReport /></PortalGate>} />
           <Route path="/activity" element={<RequirePermission permission="audit:read"><Activity /></RequirePermission>} />
           <Route path="/admin" element={<RequirePermission permission="portal:write"><Admin /></RequirePermission>} />
           <Route path="/superadmin" element={<RequirePermission permission="admin:manage"><SuperAdmin /></RequirePermission>} />

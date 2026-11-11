@@ -349,16 +349,23 @@ export const phaseMilestones = (phaseId: string, title: string): Locate => (d) =
 const blankPhase = (phase: string): PhaseRow => ({ id: uid(), phase, status: null, start: '', end: '', milestones: [] })
 
 /** Renaming keeps the phases; a new workstream starts with every standard phase, blank. */
-export function transitionWorkstreamRequest(t: TransitionData, index?: number): EditRequest {
+/** `name` pre-fills a new workstream (a Program Level tab with nothing behind it yet). */
+export function transitionWorkstreamRequest(t: TransitionData, index?: number, name?: string): EditRequest {
   const w = index === undefined ? undefined : t.dashboard[index]
   return {
     label: w ? `workstream ${quote(w.workstream)}` : 'workstream',
     isNew: !w,
-    fields: [{ key: 'workstream', label: 'Workstream', required: true }],
-    value: { workstream: w?.workstream },
+    fields: [
+      { key: 'workstream', label: 'Workstream', required: true },
+      { key: 'status', label: 'Overall Status (blank = worked out from the phases)', type: 'status' },
+      { key: 'summary', label: 'Overall Status Summary', type: 'textarea' },
+      { key: 'tower', label: 'Tower (Transition Summary Report only)' },
+    ],
+    value: { workstream: w?.workstream ?? name, status: w?.status ?? '', summary: w?.summary, tower: w?.tower },
     save: (d, v) => {
-      if (w) tr(d).dashboard[index!].workstream = str(v.workstream)
-      else tr(d).dashboard.push({ workstream: str(v.workstream), phases: TRANSITION_PHASES.map(blankPhase) })
+      const fields = { workstream: str(v.workstream), status: (str(v.status) || null) as StatusKey | null, summary: str(v.summary), tower: str(v.tower) }
+      if (w) Object.assign(tr(d).dashboard[index!], fields)
+      else tr(d).dashboard.push({ ...fields, phases: TRANSITION_PHASES.map(blankPhase) })
     },
     remove: w && ((d) => { tr(d).dashboard.splice(index!, 1) }),
   }
@@ -408,7 +415,8 @@ export function phaseRequest(t: TransitionData, wsIndex: number, phase?: PhaseRo
   }
 }
 
-export function raidRequest(t: TransitionData, index?: number): EditRequest {
+/** `workstream` pre-fills a new item's workstream (added from that Program Level tab). */
+export function raidRequest(t: TransitionData, index?: number, workstream?: string): EditRequest {
   const r = index === undefined ? undefined : t.raid[index]
   return {
     label: r ? `RAID item ${quote(r.description)}` : 'RAID item',
@@ -420,13 +428,19 @@ export function raidRequest(t: TransitionData, index?: number): EditRequest {
       { key: 'owner', label: 'Owner' },
       { key: 'dueDate', label: 'Due Date', type: 'date' },
       { key: 'status', label: 'Status', type: 'select', options: RAID_STATUS },
+      {
+        key: 'workstream', label: 'Workstream (blank = program-wide, on no tab)', type: 'select',
+        options: [...new Set([...t.dashboard.map((w) => w.workstream), ...(r?.workstream ? [r.workstream] : [])])].map((n) => ({ value: n, label: n })),
+      },
       ATTENTION,
     ],
-    value: r ? { ...r } : { type: 'R', status: 'Open' },
+    value: r ? { ...r } : { type: 'R', status: 'Open', workstream },
     save: (d, v) => {
       const next: RaidItem = {
         type: v.type as RaidItem['type'], description: str(v.description), mitigation: v.mitigation as string[],
-        owner: str(v.owner), dueDate: str(v.dueDate), status: str(v.status), needsPremeraAttention: flag(v.needsPremeraAttention),
+        owner: str(v.owner), dueDate: str(v.dueDate), status: str(v.status),
+        ...(str(v.workstream) ? { workstream: str(v.workstream) } : {}),
+        needsPremeraAttention: flag(v.needsPremeraAttention),
       }
       const list = tr(d).raid
       if (r) list[index!] = next

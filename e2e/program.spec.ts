@@ -1,33 +1,45 @@
 import { test, expect } from '@playwright/test'
-import { USERS, api, loadPortal, signInAs, tokenFor } from './helpers'
+import { SHARED_RAID, USERS, api, loadPortal, signInAs, tokenFor } from './helpers'
 
 test.beforeAll(async ({ request }) => {
   await loadPortal(request)
 })
 
 test.describe('Program Level', () => {
-  test('ITO is the default tab and shows its workstreams and the status key', async ({ page, request }) => {
+  test('opens on the first operational-area tab with the status key, KPI cards and the tab content', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust)
-    await expect(page.getByRole('tab', { name: /ITO/ })).toHaveAttribute('aria-selected', 'true')
-    await expect(page.getByText('Delivery & Operational Continuity').first()).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Service Desk and ITOC' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tab')).toHaveCount(11)
+    await expect(page.getByRole('group', { name: 'Status counts' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Transition Program Summary - Service Desk and ITOC' })).toContainText('Service desk KT is on plan.')
+    await expect(page.getByText(SHARED_RAID).first()).toBeVisible()
     for (const label of ['On Track', 'At Risk', 'Delayed', 'Complete']) {
       await expect(page.getByText(label, { exact: true }).filter({ visible: true }).first()).toBeVisible()
     }
   })
 
-  test('switching to BPO and Transition changes the content', async ({ page, request }) => {
+  test('switching tabs changes the content to that area', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust)
-    await page.getByRole('tab', { name: /BPO/ }).click()
-    await expect(page.getByRole('tab', { name: /BPO/ })).toHaveAttribute('aria-selected', 'true')
-    await page.getByRole('tab', { name: /Transition/ }).click()
-    await expect(page.getByTestId('transition-tab')).toBeVisible()
-    await expect(page.getByText('Transition Program Executive Summary')).toBeVisible()
-    await expect(page.getByText('Transition Program Dashboard')).toBeVisible()
+    await page.getByRole('tab', { name: 'Claims Operations (100-400)' }).click()
+    await expect(page.getByRole('tab', { name: 'Claims Operations (100-400)' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('region', { name: 'Transition Program Summary - Claims Operations (100-400)' })).toBeVisible()
+    await expect(page.getByText(SHARED_RAID)).toHaveCount(0)
   })
 
-  test('the Executive Summary collapses and expands', async ({ page, request }) => {
+  test('the selected tab survives a page reload', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust)
-    await page.getByRole('tab', { name: /Transition/ }).click()
+    await page.getByRole('tab', { name: 'Enrollment & Billing' }).click()
+    await page.reload()
+    await expect(page.getByRole('tab', { name: 'Enrollment & Billing' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  test('the Transition Summary Report shows the executive summary (collapsible) and the old-format dashboard', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust)
+    await page.getByRole('link', { name: 'Transition Summary Report' }).first().click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Transition Summary Report' })).toBeVisible()
+    await expect(page.getByText('Discovery / Planning / Onboarding')).toBeVisible()
+    await expect(page.getByText('Customer Service & Platform Engineering').first()).toBeVisible()
     const toggle = page.getByRole('button', { name: /Transition Program Executive Summary/ })
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await toggle.click()
@@ -37,12 +49,9 @@ test.describe('Program Level', () => {
     await expect(page.getByText('Key Accomplishments')).toBeVisible()
   })
 
-  test('the selected tab survives a page reload', async ({ page, request }) => {
-    await signInAs(page, request, USERS.ust)
-    await page.getByRole('tab', { name: /BPO/ }).click()
-    await page.reload()
-    // Expected for production: a reload keeps the user where they were.
-    await expect(page.getByRole('tab', { name: /BPO/ })).toHaveAttribute('aria-selected', 'true')
+  test('the old Risks & Issues address lands on Program Level', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/risks')
+    await expect(page).toHaveURL(/\/program/)
   })
 })
 
@@ -55,7 +64,7 @@ test.describe('quick feedback (thumbs)', () => {
     const who = { email: `e2e.thumbs${Date.now()}@ust.com`, role: 'ust_stakeholder' as const }
     const token = await signInAs(page, request, who)
     await gridReady(page)
-    // The first operational area's thumbs-up, in the grid (not a milestone's, whose grid can render first).
+    // The first phase row's thumbs-up, in the grid.
     const up = page.locator('[data-tour="workstream-grid"] [row-id] [title="Good"]').first()
     const id = await up.locator('xpath=ancestor::*[@row-id][1]').getAttribute('row-id')
     await up.click()
@@ -74,9 +83,7 @@ test.describe('quick feedback (thumbs)', () => {
     await signInAs(page, request, who)
     await gridReady(page)
     // Wait for the real document: clicking during the bundled-sample flash (D2) votes on a row that is then replaced.
-    await expect(page.getByText('Delivery & Operational Continuity').first()).toBeVisible()
-    await expect(page.getByText(/1 Operational Area shared with you/)).toBeVisible()
-    // Each row renders the control twice (grid + phone layout); always use the visible one.
+    await expect(page.getByText('Service desk KT is on plan.')).toBeVisible()
     const down = page.getByTitle('Needs attention').filter({ visible: true }).first()
     await down.click()
     await page.getByRole('button', { name: 'Submit' }).click()
@@ -117,10 +124,10 @@ test.describe('quick feedback (thumbs)', () => {
 test('@mobile Program Level is usable on a phone: nav menu toggles and tabs work', async ({ page, request }) => {
   await signInAs(page, request, USERS.ust)
   await page.getByRole('button', { name: 'Toggle menu' }).click()
-  await expect(page.getByRole('link', { name: 'Risks & Issues' }).last()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Transition Summary Report' }).last()).toBeVisible()
   await page.getByRole('button', { name: 'Toggle menu' }).click()
-  await page.getByRole('tab', { name: /BPO/ }).click()
-  await expect(page.getByRole('tab', { name: /BPO/ })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('tab', { name: 'Database Administration' }).click()
+  await expect(page.getByRole('tab', { name: 'Database Administration' })).toHaveAttribute('aria-selected', 'true')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow, 'page should not scroll sideways').toBeLessThanOrEqual(1)
 })

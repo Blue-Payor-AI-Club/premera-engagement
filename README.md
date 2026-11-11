@@ -5,7 +5,7 @@ Level** (ITO, BPO, Transition), **Risks & Issues** and **Feedback to UST**. UST 
 **Activity** (the audit trail) and **Data Sync** (Excel import / export / rollback), and Super
 Admins get **Super Admin** (users, access requests, invites, notification recipients, email log).
 
-React 19 + Vite + TypeScript, MUI, ag-grid and Tailwind. All data comes from
+React 19 + Vite + TypeScript, MUI, ag-grid, Tailwind and shadcn/ui (Radix, in `src/components/ui/`). All data comes from
 [`premera-engagement-api`](../premera-engagement-api/README.md); there is no mock-data mode.
 The read-only phone app is [`premera-engagement-mobile`](../premera-engagement-mobile/README.md).
 These are three separate git repos that share one parent folder.
@@ -53,7 +53,11 @@ server (port 5199). It never touches the shared server.
   When the document's shape changes, bump `STORAGE_KEY` so stale caches are dropped.
 - `src/data/portalData.ts` holds the document types. The API (`src/types/portal.ts`) and the
   mobile app keep their own copies, so a contract change has to be made in all three.
-- Portal content is maintained in Excel through **Data Sync**, not edited in the UI.
+- Portal content comes from Excel through **Data Sync**. UST users can also edit, add and
+  delete rows in place: `components/Editor.tsx` is the one form, `lib/editRequests.ts` holds
+  the per-sheet fields (they mirror the workbook columns), and saves go through
+  `PortalDataContext.edit()` to `PUT /portal/edit` with `If-Match`. Premera users get no edit
+  controls.
 
 ## Docs
 

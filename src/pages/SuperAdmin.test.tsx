@@ -181,7 +181,7 @@ describe('SuperAdmin — invitations', () => {
     await u.selectOptions(screen.getByLabelText('Invite role'), 'ust_stakeholder')
     await u.click(screen.getByRole('button', { name: /send invite/i }))
 
-    expect(adminApi.createInvite).toHaveBeenCalledWith('friend@premera.com', 'ust_stakeholder', undefined)
+    expect(adminApi.createInvite).toHaveBeenCalledWith('friend@premera.com', 'ust_stakeholder', undefined, undefined)
     expect(await screen.findByRole('status')).toHaveTextContent(/could not be delivered/i)
   })
 
@@ -194,7 +194,7 @@ describe('SuperAdmin — invitations', () => {
     await u.type(screen.getByPlaceholderText('name@company.com'), 'priya@premera.com')
     await u.click(screen.getByRole('button', { name: /send invite/i }))
 
-    expect(adminApi.createInvite).toHaveBeenCalledWith('priya@premera.com', 'premera_stakeholder', 'Priya Nair')
+    expect(adminApi.createInvite).toHaveBeenCalledWith('priya@premera.com', 'premera_stakeholder', 'Priya Nair', undefined)
     expect(await screen.findByRole('status')).toHaveTextContent('Priya Nair (priya@premera.com)')
   })
 
@@ -210,6 +210,23 @@ describe('SuperAdmin — invitations', () => {
     expect(within(pendingRow).getByRole('button', { name: 'Resend' })).toBeInTheDocument()
     const doneRow = screen.getByText('done@x.com').closest('tr')!
     expect(within(doneRow).queryByRole('button')).toBeNull()
+  })
+})
+
+describe('SuperAdmin — inviting a Premera Executive / Lead', () => {
+  it('asks for the tabs and sends them with the invite as a Premera Stakeholder', async () => {
+    vi.mocked(adminApi.createInvite).mockResolvedValue({ id: 'inv_2', emailSent: true } as Invite)
+    renderPage()
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('tab', { name: /invitations/i }))
+    await u.type(await screen.findByPlaceholderText('name@company.com'), 'lead@premera.com')
+    await u.selectOptions(screen.getByLabelText('Invite role'), 'premera_lead')
+    await u.click(screen.getByRole('button', { name: /send invite/i }))
+    expect(await screen.findByText(/Pick at least one tab/)).toBeInTheDocument()
+    expect(adminApi.createInvite).not.toHaveBeenCalled()
+    await u.click(screen.getByLabelText('Database Administration'))
+    await u.click(screen.getByRole('button', { name: /send invite/i }))
+    expect(adminApi.createInvite).toHaveBeenCalledWith('lead@premera.com', 'premera_stakeholder', undefined, { title: 'lead', tabs: ['Database Administration'] })
   })
 })
 

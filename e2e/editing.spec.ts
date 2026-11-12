@@ -126,3 +126,48 @@ test.describe('Client-facing view', () => {
     await expect(page.getByText(/Updated /).first()).toBeVisible()
   })
 })
+
+test.describe('Set 3: report editing, replies and tabs', () => {
+  test('Premera replies on a RAID item; UST sees the count and the thread and answers', async ({ page, request }) => {
+    await signInAs(page, request, { email: `e2e.reply${Date.now()}@premera.com`, role: 'premera_stakeholder' }, '/program')
+    const row = await gridRow(page, SHARED_RAID)
+    await row.getByRole('button', { name: /^Replies on / }).click()
+    const d = dialog(page)
+    await d.getByRole('button', { name: 'Send reply' }).click()
+    await expect(d.getByText('Write a reply first.')).toBeVisible()
+    await d.getByLabel('Your reply').fill('E2E: can UST confirm the go-live date?')
+    await d.getByRole('button', { name: 'Send reply' }).click()
+    await expect(d.getByRole('list', { name: 'Reply thread' })).toContainText('E2E: can UST confirm the go-live date?')
+    await page.keyboard.press('Escape')
+
+    await signInAs(page, request, USERS.ust, '/program')
+    const ustRow = await gridRow(page, SHARED_RAID)
+    await expect(ustRow.getByRole('button', { name: /^Replies on / })).toContainText(/Replies \(\d+\)/)
+    await ustRow.getByRole('button', { name: /^Replies on / }).click()
+    await expect(dialog(page).getByText('E2E: can UST confirm the go-live date?').first()).toBeVisible()
+    await expect(dialog(page).getByText('Premera Stakeholder').first()).toBeVisible()
+  })
+
+  test('UST edits a row of the old-format dashboard on the report; the phase on the tab changes too', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/report')
+    await page.getByRole('button', { name: 'Edit Service Desk and ITOC dashboard row' }).click()
+    await dialog(page).getByLabel('Go-Live (Transition / KT end)').fill('7/15/2027')
+    await dialog(page).getByRole('button', { name: 'Save' }).click()
+    await expect(dialog(page)).toBeHidden()
+    await expect(page.locator('.ag-row', { hasText: '7/15/2027' }).first()).toBeVisible()
+    await page.goto('/program')
+    await expect(page.locator('.ag-row', { hasText: 'Transition / KT' })).toContainText('7/15/2027')
+  })
+
+  test('the operational-area tabs share the full width equally', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/program')
+    const list = page.getByRole('tablist', { name: 'Operational area' })
+    const widths = await page.getByRole('tab').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)))
+    const box = (await list.boundingBox())!
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1)
+    const first = (await page.getByRole('tab').first().boundingBox())!
+    const last = (await page.getByRole('tab').last().boundingBox())!
+    expect(Math.abs(first.x - box.x)).toBeLessThanOrEqual(2)
+    expect(Math.abs(last.x + last.width - (box.x + box.width))).toBeLessThanOrEqual(2)
+  })
+})

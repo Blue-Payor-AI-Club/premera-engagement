@@ -157,7 +157,7 @@ interface PortalData {
   transition: TransitionBlock   // the Transition tab of /program — see below
 }
 
-interface TransitionBlock {      // rows carry no ids (nothing here is quick-feedback-votable)
+interface TransitionBlock {      // only RAID items carry ids (votes + replies); phase ids come from workstream + phase
   asOf: string                   // e.g. "10/08/26"
   overallStatus: StatusKey
   premeraContacts: { role: string; name: string }[]
@@ -185,7 +185,7 @@ interface TransitionBlock {      // rows carry no ids (nothing here is quick-fee
       needsPremeraAttention?: boolean
     }[]
   }[]
-  raid: { type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string; workstream?: string }[]  // workstream = its Program Level tab; blank = program-wide
+  raid: { id?: string; type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string; workstream?: string }[]  // workstream = its Program Level tab; blank = program-wide
 }
 ```
 
@@ -195,7 +195,7 @@ fills in the default, and every `GET /v1/portal` response includes it. It is edi
 (`Transition As-Of Date`, `Transition Overall Status`, `Transition Overall Summary`). Those sheets and Meta rows are
 optional on import: a workbook without them keeps the stored Transition data and returns an
 `OPTIONAL_SHEET_MISSING` warning per absent sheet. `TransitionPhases` carries the workstream-level `Tower`,
-`Overall Status` and `Overall Status Summary` columns (filled on a workstream's first row); `TransitionRaid` has a `Workstream` column. (A workbook from before the phase layout has a
+`Overall Status` and `Overall Status Summary` columns (filled on a workstream's first row); `TransitionRaid` has `Workstream` and `ID` columns (layout v6; a blank ID is a new item, and a row whose ID is missing keeps the id of the stored item with the same description). (A workbook from before the phase layout has a
 `TransitionDashboard` sheet instead of `TransitionPhases`; it is ignored and the stored dashboard kept.)
 
 ### Status enum reference (`src/data/status.ts`)
@@ -466,6 +466,27 @@ Content-Type: application/json
 ```
 
 ---
+
+### 7.1 Replies on RAID items — `/replies` (set 3)
+
+A thread under each RAID item that UST and Premera both read and write. Only for items the
+caller can see (Premera Attention, and a Premera Executive / Lead's tabs); anything else is a 404.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/replies/counts` | `{ [raidItemId]: number }` for the caller's visible items |
+| `GET` | `/replies/{itemId}` | The thread, oldest first: `{ id, itemId, text, author, authorName?, authorRole, authorRoleLabel, createdAt }[]` |
+| `POST` | `/replies/{itemId}` | `{ text }` (1–2000 chars) → 201 with the reply; audited, emailed to the Client-feedback recipients |
+
+Thumbs on the Transition Summary Report's old-format dashboard use `itemId = "ws:<workstream name>"`.
+
+### 7.2 Premera Executives / Leads per tab — `/admin/tab-access` (set 2, Super Admin)
+
+`GET` → `{ tabs: { tab, executives: {name,email}[], leads: {name,email}[] }[], updatedAt?, updatedBy? }`;
+`PUT { tabs }` replaces it (unknown tab → 422). A Premera Stakeholder listed on any tab gets only
+those tabs' workstreams and RAID items from `GET /portal`, and `GET /auth/me` returns `tabs`.
+`POST /admin/invites` takes an optional `tabAccess: { title: 'executive' | 'lead', tabs }` (Premera
+Stakeholder invites only) that adds the invitee to those tabs.
 
 ## 8. Validation
 

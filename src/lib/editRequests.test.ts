@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { TRANSITION_DATA } from '../data/transitionData'
-import { issueRequest, phaseMilestones, phaseRequest, transitionWorkstreamRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
+import { legacyRowRequest, raidRequest, issueRequest, phaseMilestones, phaseRequest, transitionWorkstreamRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
 
 const doc = (): PortalData => structuredClone({ ...DEFAULT_PORTAL_DATA, transition: TRANSITION_DATA })
 
@@ -81,5 +81,33 @@ describe('edit requests', () => {
     phaseRequest(d.transition!, wi, saved).remove!(d)
     expect(d.transition!.dashboard[wi].phases.map((p) => p.phase)).not.toContain('Shadow')
     expect(phaseRequest(d.transition!, wi).value.phase).toBe('Shadow') // the free phase is offered first
+  })
+
+  it('an old-format dashboard row writes back to its phases, adding what is missing', () => {
+    const d = doc()
+    const t = d.transition!
+    const wi = 0
+    t.dashboard[wi].phases = t.dashboard[wi].phases.filter((p) => p.phase !== 'Onboarding')
+    const req = legacyRowRequest(t, wi)
+    req.save(d, { ...req.value, tower: 'New Tower', dpStart: '1/5/2027', sowSubmit: '1/10/2027', dpEnd: '2/1/2027', obEnd: '3/1/2027', ktStatus: 'atRisk', ktEnd: '6/1/2027' })
+    const w = d.transition!.dashboard[wi]
+    const phase = (n: string) => w.phases.find((p) => p.phase === n)!
+    expect(w.tower).toBe('New Tower')
+    expect([phase('Discovery & Planning').start, phase('Discovery & Planning').end]).toEqual(['1/5/2027', '2/1/2027'])
+    expect(phase('Discovery & Planning').milestones.find((m) => m.label === 'SOW submitted')!.due).toBe('1/10/2027')
+    expect(phase('Onboarding').end).toBe('3/1/2027') // added back, in phase order
+    expect(w.phases.map((p) => p.phase).indexOf('Onboarding')).toBe(1)
+    expect([phase('Transition / KT').status, phase('Transition / KT').end]).toEqual(['atRisk', '6/1/2027'])
+  })
+
+  it('a RAID edit keeps the item id (its votes and replies); a new item gets one', () => {
+    const d = doc()
+    d.transition!.raid[0].id = 'rd_keep'
+    const edit = raidRequest(d.transition!, 0)
+    edit.save(d, { ...edit.value, description: 'changed' })
+    expect(d.transition!.raid[0]).toMatchObject({ id: 'rd_keep', description: 'changed' })
+    const add = raidRequest(d.transition!)
+    add.save(d, { ...add.value, description: 'new', mitigation: [] })
+    expect(d.transition!.raid.at(-1)!.id).toBeTruthy()
   })
 })

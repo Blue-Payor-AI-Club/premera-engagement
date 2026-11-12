@@ -72,6 +72,8 @@ export interface TransitionWorkstream {
 }
 
 export interface RaidItem {
+  /** Stable id (thumbs votes and replies hang off it); the API mints one when missing. */
+  id?: string
   type: 'R' | 'A' | 'I' | 'D'
   description: string
   mitigation: string[]

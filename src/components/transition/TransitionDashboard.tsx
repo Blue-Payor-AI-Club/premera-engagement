@@ -12,6 +12,8 @@ import { phaseMilestones, phaseRequest, raidRequest, transitionHeaderRequest, tr
 import OverdueTag from '../OverdueTag'
 import DataGrid, { Clamp, FullList } from '../DataGrid'
 import LegacyDashboard from './LegacyDashboard'
+import { ReplyButton, ReplyDialog, type ReplyTarget } from '../RaidReplies'
+import { useReplyCounts } from '../../lib/replies'
 import { raidDone, sameName } from '../../lib/programTabs'
 import { dateColumn, editColumn, renderColumn, statusColumn } from '../gridColumns'
 
@@ -202,18 +204,30 @@ export function WorkstreamDashboard({ data, index }: { data: TransitionData; ind
   )
 }
 
-type RaidRow = RaidItem & { id: string; index: number }
+type RaidRow = RaidItem & { rowId: string; index: number }
+type Replies = { counts: Record<string, number>; open: (t: ReplyTarget) => void }
+
+/** Thumbs and the reply thread for a RAID item (only items with an id: the bundled sample has none). */
+function RaidFeedback({ r, replies }: { r: RaidRow; replies: Replies }) {
+  if (!r.id) return null
+  return (
+    <span className="flex items-center gap-2">
+      <QuickFeedback itemId={r.id} itemLabel={r.description} />
+      <ReplyButton target={{ id: r.id, label: r.description }} count={replies.counts[r.id] ?? 0} onOpen={replies.open} />
+    </span>
+  )
+}
 
 const RAID_WORD: Record<RaidItem['type'], string> = { R: 'Risk', A: 'Assumption', I: 'Issue', D: 'Dependency' }
 
 /** Phones: one card per RAID item instead of a seven-column grid cut off at the side. */
-function RaidCards({ data, rows }: { data: TransitionData; rows: RaidRow[] }) {
+function RaidCards({ data, rows, replies }: { data: TransitionData; rows: RaidRow[]; replies: Replies }) {
   if (!rows.length) return <p className="px-3 py-4 text-center text-sm text-slate-400">Nothing shared in this section yet.</p>
   return (
     <div aria-label="RAID log" role="group">
       <div className="px-3 py-2 bg-[#e8f1f8] text-[#10285c] font-bold text-sm">RAID log</div>
       {rows.map((r) => (
-        <div key={r.id} className="px-3 py-2.5 border-b border-slate-100 space-y-1">
+        <div key={r.rowId} className="px-3 py-2.5 border-b border-slate-100 space-y-1">
           <div className="flex items-start justify-between gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{RAID_WORD[r.type]}</span>
             <span className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -226,18 +240,24 @@ function RaidCards({ data, rows }: { data: TransitionData; rows: RaidRow[] }) {
           <div className="text-xs text-slate-500">
             {r.owner || '—'} · Due {r.dueDate || '—'}<OverdueTag date={r.dueDate} done={raidDone(r)} />
           </div>
+          <RaidFeedback r={r} replies={replies} />
         </div>
       ))}
     </div>
   )
 }
 
-/** The RAID log; with `workstream`, only that workstream's items (a Program Level tab). */
+/** The RAID log: with `workstream`, that workstream's items (a Program Level tab); otherwise the
+ * generic, program-wide items that belong to no workstream (the Transition Summary Report). */
 export function RaidGrid({ data, workstream }: { data: TransitionData; workstream?: string }) {
   const canEdit = !!useEditor()
   const phone = useMediaQuery('(max-width: 639.95px)')
-  const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, id: String(index), index }))
-    .filter((r) => workstream === undefined || sameName(r.workstream, workstream)), [data.raid, workstream])
+  const { counts, bump } = useReplyCounts()
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
+  const replies = useMemo<Replies>(() => ({ counts, open: setReplyTo }), [counts])
+  const thread = <ReplyDialog target={replyTo} onClose={() => setReplyTo(null)} onPosted={bump} />
+  const rows = useMemo<RaidRow[]>(() => data.raid.map((r, index) => ({ ...r, rowId: r.id ?? String(index), index }))
+    .filter((r) => (workstream === undefined ? !r.workstream?.trim() : sameName(r.workstream, workstream))), [data.raid, workstream])
   const columns = useMemo<ColDef<RaidRow>[]>(() => [
     renderColumn<RaidRow>({ headerName: 'RAID', width: 80, cellClass: 'flex items-center justify-center font-semibold' }, (r) => r.type),
     renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 190 }, (r) => (
@@ -247,18 +267,19 @@ export function RaidGrid({ data, workstream }: { data: TransitionData; workstrea
     { headerName: 'Owner', width: 140, valueGetter: (p) => p.data?.owner },
     dateColumn<RaidRow>('Due Date', (r) => r.dueDate, raidDone, 120),
     { headerName: 'Status', width: 120, valueGetter: (p) => p.data?.status },
+    renderColumn<RaidRow>({ headerName: 'Feedback', width: 200 }, (r) => <RaidFeedback r={r} replies={replies} />),
     ...editColumn<RaidRow>(canEdit, (r) => raidRequest(data, r.index), () => 'Edit RAID item'),
-  ], [canEdit, data])
+  ], [canEdit, data, replies])
 
   const add = <div className="p-2"><AddButton request={() => raidRequest(data, undefined, workstream)}>Add RAID item</AddButton></div>
-  if (phone) return <><RaidCards data={data} rows={rows} />{add}</>
+  if (phone) return <><RaidCards data={data} rows={rows} replies={replies} />{add}{thread}</>
   return (
     <>
       <DataGrid<RaidRow>
         label="RAID log"
         rows={rows}
         columns={columns}
-        rowId={(r) => r.id}
+        rowId={(r) => r.rowId}
         rowHeight={56}
         emptyText="Nothing shared in this section yet."
         details={(r) => ({
@@ -271,10 +292,12 @@ export function RaidGrid({ data, workstream }: { data: TransitionData; workstrea
             { label: 'Status', value: r.status || '—' },
             ...(canEdit ? [{ label: 'Premera can see it', value: r.needsPremeraAttention ? 'Yes' : 'No (UST only)' }] : []),
           ],
+          extra: <RaidFeedback r={r} replies={replies} />,
           actions: <EditButton className="" title="Edit RAID item" request={() => raidRequest(data, r.index)} />,
         })}
       />
       {add}
+      {thread}
     </>
   )
 }

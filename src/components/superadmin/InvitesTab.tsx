@@ -6,6 +6,14 @@ import { useResource } from '../../hooks/useResource'
 import { adminApi, type Invite } from '../../lib/adminApi'
 import { ROLES, ROLE_LABELS, type Role } from '../../lib/authApi'
 import { errorMessage, formatDateTime } from '../../lib/format'
+import { PROGRAM_TABS } from '../../lib/programTabs'
+
+// Premera Executive / Lead are Premera Stakeholders limited to the tabs picked here (Tab access).
+type Level = Role | 'premera_executive' | 'premera_lead'
+const TAB_LEVELS: { value: Level; label: string }[] = [
+  { value: 'premera_executive', label: 'Premera Executive (chosen tabs)' },
+  { value: 'premera_lead', label: 'Premera Lead (chosen tabs)' },
+]
 
 function statusBadge(i: Invite) {
   if (i.status === 'accepted') return <Badge tone="green">Accepted</Badge>
@@ -18,7 +26,9 @@ export default function InvitesTab() {
   const { data: invites, error, loading, reload } = useResource(adminApi.listInvites)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<Role>('premera_stakeholder')
+  const [role, setRole] = useState<Level>('premera_stakeholder')
+  const [tabs, setTabs] = useState<string[]>([])
+  const tabLevel = role === 'premera_executive' || role === 'premera_lead'
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -43,11 +53,14 @@ export default function InvitesTab() {
     const address = email.trim()
     if (!address) return
     const displayName = name.trim() || undefined
+    if (tabLevel && !tabs.length) { setActionError('Pick at least one tab for a Premera Executive or Lead.'); return }
+    const tabAccess = tabLevel ? { title: role === 'premera_executive' ? 'executive' as const : 'lead' as const, tabs } : undefined
     void act(
-      () => adminApi.createInvite(address, role, displayName),
+      () => adminApi.createInvite(address, tabLevel ? 'premera_stakeholder' : (role as Role), displayName, tabAccess),
       (r) => {
         setEmail('')
         setName('')
+        setTabs([])
         const who = displayName ? `${displayName} (${address})` : address
         return r && (r as Invite).emailSent === false
           ? `Invite created for ${who}, but the email could not be delivered. Use Resend once mail is working.`
@@ -69,10 +82,24 @@ export default function InvitesTab() {
         </label>
         <label className="text-xs font-medium text-slate-500">
           Access level
-          <Select aria-label="Invite role" value={role} onChange={(e) => setRole(e.target.value as Role)} className="mt-1 block">
+          <Select aria-label="Invite role" value={role} onChange={(e) => setRole(e.target.value as Level)} className="mt-1 block">
             {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+            {TAB_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </Select>
         </label>
+        {tabLevel && (
+          <fieldset className="basis-full rounded-lg border border-slate-200 p-3">
+            <legend className="px-1 text-xs font-medium text-slate-500">Tabs they will see (only these)</legend>
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {PROGRAM_TABS.map((t) => (
+                <label key={t} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={tabs.includes(t)} onChange={(e) => setTabs((cur) => (e.target.checked ? [...cur, t] : cur.filter((x) => x !== t)))} />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <button type="submit" disabled={busy || !email.trim()} className={btnPrimary}><Send size={14} /> Send invite</button>
       </form>
 

@@ -5,11 +5,15 @@ import type { PhaseRow, TransitionData, TransitionWorkstream } from '../../data/
 import StatusDot from '../StatusDot'
 import VisibleToPremera from '../VisibleToPremera'
 import DataGrid, { Clamp } from '../DataGrid'
-import { renderColumn } from '../gridColumns'
+import { editColumn, renderColumn } from '../gridColumns'
+import QuickFeedback from '../QuickFeedback'
+import { useEditor } from '../Editor'
+import { legacyRowRequest } from '../../lib/editRequests'
 
 // The Transition Dashboard in the slide's pre-phase layout (Tower | Workstream | Discovery /
-// Planning / Onboarding | Transition | Notes), rebuilt read-only from the phase rows for the
-// Transition Summary Report. Edits happen on the Program Level tabs.
+// Planning / Onboarding | Transition | Notes), rebuilt from the phase rows for the Transition
+// Summary Report. Its pencil edits those phases (lib/editRequests legacyRowRequest); thumbs are
+// per workstream (itemId "ws:<name>").
 
 interface Row {
   id: string
@@ -17,6 +21,7 @@ interface Row {
   first: boolean
   groupSize: number
   w: TransitionWorkstream
+  wi: number
   planning: PhaseRow | undefined
   onboarding: PhaseRow | undefined
   transition: PhaseRow | undefined
@@ -29,13 +34,13 @@ function legacyRows(dashboard: TransitionWorkstream[]): Row[] {
   // Consecutive workstreams with the same tower form one group, as on the slide.
   const rows: Row[] = []
   let head: Row | undefined
-  for (const w of dashboard) {
+  for (const [wi, w] of dashboard.entries()) {
     const tower = w.tower || '—'
     const planning = find(w, 'Discovery & Planning')
     const prev = rows[rows.length - 1]
     const first = !prev || prev.tower !== tower
     const row: Row = {
-      id: w.workstream, tower, first, groupSize: 1, w, planning,
+      id: w.workstream, tower, first, groupSize: 1, w, wi, planning,
       onboarding: find(w, 'Onboarding'),
       transition: find(w, 'Transition / KT'),
       sowSubmit: planning?.milestones.find((m) => m.label === 'SOW submitted')?.due ?? '',
@@ -51,6 +56,7 @@ const PhaseStatus = ({ status }: { status: StatusKey | null | undefined }) =>
   status ? <StatusDot status={status} size={11} /> : <span className="text-slate-500 text-xs">N/A</span>
 
 export default function LegacyDashboard({ data }: { data: TransitionData }) {
+  const canEdit = !!useEditor()
   const rows = useMemo(() => legacyRows(data.dashboard), [data.dashboard])
   const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => {
     const text = (headerName: string, get: (r: Row) => string | undefined, headerTooltip?: string, width = 86): ColDef<Row> =>
@@ -94,8 +100,10 @@ export default function LegacyDashboard({ data }: { data: TransitionData }) {
           </Clamp>
         )
       }),
+      renderColumn<Row>({ headerName: 'Feedback', width: 100 }, (r) => <QuickFeedback itemId={`ws:${r.w.workstream}`} itemLabel={r.w.workstream} />),
+      ...editColumn<Row>(canEdit, (r) => legacyRowRequest(data, r.wi), (r) => `Edit ${r.w.workstream} dashboard row`),
     ]
-  }, [])
+  }, [canEdit, data])
 
   return (
     <DataGrid<Row>

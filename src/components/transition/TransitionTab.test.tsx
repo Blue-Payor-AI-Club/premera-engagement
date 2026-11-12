@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TransitionTab from './TransitionTab'
-import { WorkstreamDashboard } from './TransitionDashboard'
+import TransitionDashboard, { WorkstreamDashboard } from './TransitionDashboard'
 import { TRANSITION_DATA } from '../../data/transitionData'
 import { AuthStub } from '../../test/auth'
 
@@ -77,6 +77,32 @@ describe('Transition Summary Report — dashboard in the old format', () => {
     }
     expect(await within(raid).findByText('Jobin Kuriakose')).toBeInTheDocument()
     expect(within(raid).getByText(/Finalize the SLA approach with Premera/)).toBeInTheDocument()
+  })
+})
+
+describe('Transition Summary Report — feedback, replies and generic RAID', () => {
+  const data = {
+    ...TRANSITION_DATA,
+    raid: [
+      { ...TRANSITION_DATA.raid[0], id: 'rd_1', description: 'Generic program risk' },
+      { ...TRANSITION_DATA.raid[0], id: 'rd_2', description: 'Service desk only', workstream: 'Service Desk and ITOC' },
+    ],
+  }
+
+  it('lists only RAID items that belong to no workstream, each with thumbs and a Reply button', async () => {
+    render(<TransitionDashboard data={data} />)
+    const raid = screen.getByRole('region', { name: /raid log/i })
+    expect(await within(raid).findByText('Generic program risk')).toBeInTheDocument()
+    expect(within(raid).queryByText('Service desk only')).toBeNull()
+    expect(within(raid).getByRole('button', { name: 'Replies on Generic program risk' })).toBeInTheDocument()
+    expect(within(raid).getAllByTitle('Good').length).toBeGreaterThan(0)
+  })
+
+  it('the old-format dashboard has a Feedback column with thumbs on every row', async () => {
+    render(<TransitionDashboard data={data} />)
+    const grid = screen.getByRole('region', { name: /workstream dashboard/i })
+    expect(await within(grid).findByText('Feedback', { selector: '.ag-header-cell-text' })).toBeInTheDocument()
+    expect((await within(grid).findAllByTitle('Good')).length).toBeGreaterThan(0)
   })
 })
 

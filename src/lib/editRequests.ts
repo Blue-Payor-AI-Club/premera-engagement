@@ -415,6 +415,63 @@ export function phaseRequest(t: TransitionData, wsIndex: number, phase?: PhaseRo
   }
 }
 
+/**
+ * A row of the Transition Summary Report's old-format dashboard. Each cell lives on a phase, so a
+ * save writes back to Discovery & Planning, Onboarding and Transition / KT (adding a phase, or the
+ * "SOW submitted" milestone, when a date is given for one that doesn't exist yet).
+ */
+export function legacyRowRequest(t: TransitionData, wsIndex: number): EditRequest {
+  const w = t.dashboard[wsIndex]
+  const find = (name: string) => w.phases.find((p) => p.phase === name)
+  const dp = find('Discovery & Planning'), ob = find('Onboarding'), kt = find('Transition / KT')
+  const sow = dp?.milestones.find((m) => m.label === 'SOW submitted')
+  return {
+    label: `dashboard row ${quote(w.workstream)}`,
+    isNew: false,
+    fields: [
+      { key: 'tower', label: 'Tower' },
+      { key: 'dpStatus', label: 'Discovery / Planning — Status (blank = not set)', type: 'status' },
+      { key: 'dpStart', label: 'Discovery / Planning — Start', type: 'date' },
+      { key: 'sowSubmit', label: 'SOW Submit (the "SOW submitted" milestone)', type: 'date' },
+      { key: 'dpEnd', label: 'SOW Approval (Discovery & Planning end)', type: 'date' },
+      { key: 'obEnd', label: 'Onboarding completion (Onboarding end)', type: 'date' },
+      { key: 'ktStatus', label: 'Transition — Status (blank = not set)', type: 'status' },
+      { key: 'ktStart', label: 'Transition — Start', type: 'date' },
+      { key: 'ktEnd', label: 'Go-Live (Transition / KT end)', type: 'date' },
+    ],
+    value: {
+      tower: w.tower, dpStatus: dp?.status ?? '', dpStart: dp?.start, sowSubmit: sow?.due, dpEnd: dp?.end,
+      obEnd: ob?.end, ktStatus: kt?.status ?? '', ktStart: kt?.start, ktEnd: kt?.end,
+    },
+    save: (d, v) => {
+      const ws = tr(d).dashboard[wsIndex]
+      // The phase to write to; created only when something is being set on it.
+      const phase = (name: string, wanted: boolean) => {
+        let p = ws.phases.find((x) => x.phase === name)
+        if (!p && wanted) {
+          p = blankPhase(name)
+          ws.phases.push(p)
+          ws.phases.sort((a, b) => TRANSITION_PHASES.indexOf(a.phase as never) - TRANSITION_PHASES.indexOf(b.phase as never))
+        }
+        return p
+      }
+      const status = (x: unknown) => (str(x) || null) as StatusKey | null
+      ws.tower = str(v.tower)
+      const p1 = phase('Discovery & Planning', !!(str(v.dpStatus) || str(v.dpStart) || str(v.dpEnd) || str(v.sowSubmit)))
+      if (p1) {
+        Object.assign(p1, { status: status(v.dpStatus), start: str(v.dpStart), end: str(v.dpEnd) })
+        const m = p1.milestones.find((x) => x.label === 'SOW submitted')
+        if (m) m.due = str(v.sowSubmit)
+        else if (str(v.sowSubmit)) p1.milestones.push({ id: uid(), label: 'SOW submitted', due: str(v.sowSubmit), revised: '', status: 'notStarted' })
+      }
+      const p2 = phase('Onboarding', !!str(v.obEnd))
+      if (p2) p2.end = str(v.obEnd)
+      const p3 = phase('Transition / KT', !!(str(v.ktStatus) || str(v.ktStart) || str(v.ktEnd)))
+      if (p3) Object.assign(p3, { status: status(v.ktStatus), start: str(v.ktStart), end: str(v.ktEnd) })
+    },
+  }
+}
+
 /** `workstream` pre-fills a new item's workstream (added from that Program Level tab). */
 export function raidRequest(t: TransitionData, index?: number, workstream?: string): EditRequest {
   const r = index === undefined ? undefined : t.raid[index]
@@ -437,6 +494,7 @@ export function raidRequest(t: TransitionData, index?: number, workstream?: stri
     value: r ? { ...r } : { type: 'R', status: 'Open', workstream },
     save: (d, v) => {
       const next: RaidItem = {
+        id: r?.id ?? uid(),
         type: v.type as RaidItem['type'], description: str(v.description), mitigation: v.mitigation as string[],
         owner: str(v.owner), dueDate: str(v.dueDate), status: str(v.status),
         ...(str(v.workstream) ? { workstream: str(v.workstream) } : {}),

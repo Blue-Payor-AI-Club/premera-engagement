@@ -129,20 +129,27 @@ export default function ProgramLevel() {
       <KpiCards w={w} />
       <RiskBadges data={transition} name={w?.workstream} />
 
-      <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1 overflow-x-auto sm:flex-wrap" role="tablist" aria-label="Operational area">
+      {/* Material-style tabs: equal shares of the full width, an underline on the selected one.
+          Phones scroll sideways instead of squeezing 11 labels into 360px. */}
+      <div
+        data-tour="tab-switcher"
+        role="tablist"
+        aria-label="Operational area"
+        className="mb-6 flex overflow-x-auto bg-white border-b border-slate-200 rounded-t-xl shadow-sm md:grid md:overflow-visible"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
         {tabs.map((t) => (
           <button
             key={t}
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`shrink-0 py-2 px-3 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
-              tab === t
-                ? 'bg-white shadow-sm text-[#0067b1] ring-1 ring-slate-200/80'
-                : 'text-slate-600 hover:text-slate-800 hover:bg-white/60 cursor-pointer'
+            className={`relative shrink-0 min-w-[8.5rem] md:min-w-0 px-2 py-3 text-center text-xs lg:text-[13px] font-semibold leading-tight transition-colors focus:outline-none focus-visible:bg-sky-50 ${
+              tab === t ? 'text-[#0067b1] bg-sky-50/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer'
             }`}
           >
             {t}
+            <span aria-hidden className={`absolute inset-x-0 bottom-0 h-[3px] rounded-t transition-opacity ${tab === t ? 'bg-[#0067b1] opacity-100' : 'opacity-0'}`} />
           </button>
         ))}
       </div>

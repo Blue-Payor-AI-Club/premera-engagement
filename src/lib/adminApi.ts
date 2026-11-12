@@ -118,8 +118,9 @@ export const adminApi = {
     json<AccessRequest>(`/admin/access-requests/${enc(id)}/reject`, send('POST', { note })),
 
   listInvites: () => json<Invite[]>('/admin/invites'),
-  createInvite: (email: string, role: Role, name?: string) =>
-    json<Invite>('/admin/invites', send('POST', { email, role, name })),
+  /** `tabAccess`: invite a Premera Executive / Lead, limited to these Program Level tabs. */
+  createInvite: (email: string, role: Role, name?: string, tabAccess?: { title: 'executive' | 'lead'; tabs: string[] }) =>
+    json<Invite>('/admin/invites', send('POST', { email, role, name, tabAccess })),
   resendInvite: (id: string) => json<Invite>(`/admin/invites/${enc(id)}/resend`, send('POST')),
   revokeInvite: (id: string) => json<void>(`/admin/invites/${enc(id)}`, send('DELETE')),
 

@@ -12,6 +12,7 @@ vi.mock('../lib/adminApi', () => ({
     listInvites: vi.fn(), createInvite: vi.fn(), resendInvite: vi.fn(), revokeInvite: vi.fn(),
     listNotificationSettings: vi.fn(), saveNotificationSetting: vi.fn(),
     getAllowedDomains: vi.fn(), saveAllowedDomains: vi.fn(),
+    getTabAccess: vi.fn(), saveTabAccess: vi.fn(),
     listEmailLog: vi.fn(), retryEmail: vi.fn(), listAudit: vi.fn(),
   },
 }))
@@ -304,5 +305,26 @@ describe('SuperAdmin — sign-in domains', () => {
     await u.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText(/lock yourself out/)).toBeInTheDocument()
+  })
+})
+
+describe('SuperAdmin — tab access (Premera Executives / Leads)', () => {
+  it("shows each tab's people and saves an edited list, one Name <email> per line", async () => {
+    vi.mocked(adminApi.getTabAccess).mockResolvedValue({ tabs: [
+      { tab: 'Service Desk and ITOC', executives: [{ name: 'Todd Manning', email: 'todd.manning@premera.com' }], leads: [] },
+      { tab: 'Employer Portal Project', executives: [], leads: [] },
+    ] })
+    vi.mocked(adminApi.saveTabAccess).mockResolvedValue({ tabs: [] })
+    renderPage()
+    const u = userEvent.setup()
+    await u.click(screen.getByRole('tab', { name: /Tab access/ }))
+    expect(await screen.findByLabelText('Service Desk and ITOC Executives')).toHaveValue('Todd Manning <todd.manning@premera.com>')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await u.type(screen.getByLabelText('Employer Portal Project Leads'), 'Ann Lee <ann.lee@premera.com>{enter}bob@premera.com')
+    await u.click(screen.getByRole('button', { name: 'Save' }))
+    expect(adminApi.saveTabAccess).toHaveBeenCalledWith([
+      { tab: 'Service Desk and ITOC', executives: [{ name: 'Todd Manning', email: 'todd.manning@premera.com' }], leads: [] },
+      { tab: 'Employer Portal Project', executives: [], leads: [{ name: 'Ann Lee', email: 'ann.lee@premera.com' }, { name: '', email: 'bob@premera.com' }] },
+    ])
   })
 })

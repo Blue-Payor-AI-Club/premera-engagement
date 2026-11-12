@@ -89,6 +89,10 @@ export interface AuditEntry {
   timestamp: string
 }
 
+export interface TabPerson { name: string; email: string }
+export interface TabAccess { tab: string; executives: TabPerson[]; leads: TabPerson[] }
+export interface TabAccessDoc { tabs: TabAccess[]; updatedAt?: string; updatedBy?: string }
+
 async function json<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await apiFetch(path, opts)
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
@@ -128,6 +132,9 @@ export const adminApi = {
   getAllowedDomains: () => json<{ domains: string[]; updatedAt?: string; updatedBy?: string }>('/admin/auth-settings'),
   saveAllowedDomains: (domains: string[]) =>
     json<{ domains: string[]; updatedAt?: string; updatedBy?: string }>('/admin/auth-settings', send('PUT', { domains })),
+
+  getTabAccess: () => json<TabAccessDoc>('/admin/tab-access'),
+  saveTabAccess: (tabs: TabAccess[]) => json<TabAccessDoc>('/admin/tab-access', send('PUT', { tabs })),
 
   listEmailLog: () => json<EmailLogEntry[]>('/admin/email-log?limit=200'),
   retryEmail: (id: string) => json<{ ok: boolean }>(`/admin/email-log/${enc(id)}/retry`, send('POST')),

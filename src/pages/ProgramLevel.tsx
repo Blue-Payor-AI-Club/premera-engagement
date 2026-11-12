@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
@@ -10,6 +9,7 @@ import { AddButton, EditButton } from '../components/Editor'
 import { TRANSITION_DATA, type TransitionData, type TransitionWorkstream } from '../data/transitionData'
 import { LEGEND_ORDER, STATUS } from '../data/status'
 import { usePortalData } from '../context/PortalDataContext'
+import { useAuth } from '../context/AuthContext'
 import { isOverdue } from '../lib/format'
 import { transitionHeaderRequest, transitionWorkstreamRequest } from '../lib/editRequests'
 
@@ -104,13 +104,16 @@ function TabContent({ data, tab, index }: { data: TransitionData; tab: string; i
 
 export default function ProgramLevel() {
   const { data } = usePortalData()
+  // A Premera Executive / Lead gets only their tabs (the API sends only their content too).
+  const { user } = useAuth()
+  const tabs = user?.tabs ? PROGRAM_TABS.filter((t) => user.tabs!.includes(t)) : PROGRAM_TABS
   // Synced from the workbook; the bundled copy only covers an API that predates the block.
   const transition = data.transition ?? TRANSITION_DATA
   // In the URL, so a reload or a shared link opens the same tab.
   const [params, setParams] = useSearchParams()
-  const tab = PROGRAM_TABS.find((t) => t === params.get('tab')) ?? PROGRAM_TABS[0]
+  const tab = tabs.find((t) => t === params.get('tab')) ?? tabs[0]
   const setTab = (t: string) => setParams({ tab: t }, { replace: true })
-  const index = useMemo(() => tabWorkstream(transition.dashboard, tab), [transition.dashboard, tab])
+  const index = tabWorkstream(transition.dashboard, tab)
   const w = transition.dashboard[index]
 
   return (
@@ -127,7 +130,7 @@ export default function ProgramLevel() {
       <RiskBadges data={transition} name={w?.workstream} />
 
       <div data-tour="tab-switcher" className="mb-6 p-1 rounded-xl bg-slate-100 flex gap-1 overflow-x-auto sm:flex-wrap" role="tablist" aria-label="Operational area">
-        {PROGRAM_TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             role="tab"

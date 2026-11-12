@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, Mail, Send, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { Bell, LayoutGrid, Mail, Send, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { Spinner } from '../components/ui'
 import UsersTab from '../components/superadmin/UsersTab'
 import RequestsTab from '../components/superadmin/RequestsTab'
@@ -7,6 +7,7 @@ import InvitesTab from '../components/superadmin/InvitesTab'
 import NotificationsTab from '../components/superadmin/NotificationsTab'
 import SignInTab from '../components/superadmin/SignInTab'
 import EmailLogTab from '../components/superadmin/EmailLogTab'
+import TabAccessTab from '../components/superadmin/TabAccessTab'
 import { useResource } from '../hooks/useResource'
 import { adminApi } from '../lib/adminApi'
 
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'users', label: 'Users', icon: Users },
   { key: 'requests', label: 'Access requests', icon: UserCheck },
   { key: 'invites', label: 'Invitations', icon: Send },
+  { key: 'tabaccess', label: 'Tab access', icon: LayoutGrid },
   { key: 'notifications', label: 'Email notifications', icon: Bell },
   { key: 'signin', label: 'Sign-in', icon: ShieldCheck },
   { key: 'emails', label: 'Email log', icon: Mail },
@@ -65,6 +67,7 @@ export default function SuperAdmin() {
             <RequestsTab requests={requests.data ?? []} error={requests.error} onChanged={requests.reload} />
           ))}
         {tab === 'invites' && <InvitesTab />}
+        {tab === 'tabaccess' && <TabAccessTab />}
         {tab === 'notifications' && <NotificationsTab />}
         {tab === 'signin' && <SignInTab />}
         {tab === 'emails' && <EmailLogTab />}

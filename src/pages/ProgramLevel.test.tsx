@@ -10,10 +10,10 @@ import { AuthStub } from '../test/auth'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { TRANSITION_DATA, type TransitionData } from '../data/transitionData'
 
-function renderPage(data: PortalData = DEFAULT_PORTAL_DATA) {
+function renderPage(data: PortalData = DEFAULT_PORTAL_DATA, tabs?: string[]) {
   return render(
     <MemoryRouter>
-      <AuthStub role="premera_stakeholder">
+      <AuthStub role="premera_stakeholder" tabs={tabs}>
         <PortalDataContext.Provider value={{ data, loading: false, error: null, refresh: vi.fn(), replaceDocument: vi.fn(), reset: vi.fn(), edit: vi.fn(), preview: false, setPreview: vi.fn(), updatedAt: null, loaded: true }}>
           <ProgramLevel />
         </PortalDataContext.Provider>
@@ -98,6 +98,12 @@ describe('/program — one tab per operational area', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Employer Portal Project' }))
     expect(screen.getByText('Nothing shared for Employer Portal Project yet.')).toBeInTheDocument()
     expect(screen.queryByText(/Risks & Issues:/)).toBeNull()
+  })
+
+  it('a Premera Executive / Lead gets only their tabs, opening on the first of them', () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced }, ['Provider Contact Center', 'Claims Operations (100-400)'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Claims Operations (100-400)', 'Provider Contact Center'])
+    expect(screen.getByRole('tab', { name: 'Claims Operations (100-400)' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('falls back to the bundled Transition content when the API response has no transition block', async () => {

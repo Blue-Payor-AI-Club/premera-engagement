@@ -89,3 +89,14 @@ test.describe('Premera Attention controls what Premera users see', () => {
     await expect(page.getByText(UST_RAID)).toHaveCount(0)
   })
 })
+
+test.describe('Premera Executives / Leads (Super Admin > Tab access)', () => {
+  test('a tab Executive gets only their tabs, and the API sends only those tabs\' content', async ({ page, request }) => {
+    // Default assignments: Todd Manning is Executive for Service Desk and ITOC and Provider Contact Center.
+    const token = await signInAs(page, request, { email: 'todd.manning@premera.com', role: 'premera_stakeholder' })
+    await expect(page.getByRole('tab')).toHaveText(['Service Desk and ITOC', 'Provider Contact Center'])
+    await expect(page.getByText('Service desk KT is on plan.')).toBeVisible()
+    const body = await (await api(request, token, 'GET', '/portal')).json()
+    expect(body.transition.dashboard.map((w: { workstream: string }) => w.workstream)).toEqual(['Service Desk and ITOC'])
+  })
+})

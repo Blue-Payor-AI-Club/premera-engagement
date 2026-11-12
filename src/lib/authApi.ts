@@ -28,6 +28,8 @@ export interface SessionUser {
   role: Role
   roleLabel: string
   permissions: Permission[]
+  /** A Premera Executive / Lead sees only these Program Level tabs; absent = every tab. */
+  tabs?: string[]
 }
 
 export type VerifyResult =

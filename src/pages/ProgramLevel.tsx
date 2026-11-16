@@ -1,5 +1,4 @@
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ListChecks } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
 import StatusChip from '../components/transition/StatusChip'
 import { RaidGrid, WorkstreamDashboard } from '../components/transition/TransitionDashboard'
@@ -39,7 +38,6 @@ function RaidBadges({ data, name }: { data: TransitionData; name: string | undef
   return (
     <div className="flex flex-wrap gap-2 mb-4">
       <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-50 border border-sky-200 hover:bg-sky-100 transition">
-        <ListChecks size={13} className="text-[#0067b1] shrink-0" />
         <span className="text-xs font-semibold text-[#0b3a53]"># of RAID: <span className="text-[#0067b1]">{items.length}</span></span>
       </button>
       <button
@@ -48,7 +46,6 @@ function RaidBadges({ data, name }: { data: TransitionData; name: string | undef
         title="RAID items Premera needs to act on"
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition ${action ? 'bg-red-600 border-red-600 hover:bg-red-700' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
       >
-        <AlertTriangle size={13} className={`shrink-0 ${action ? 'text-white' : 'text-slate-400'}`} />
         <span className={`text-xs font-semibold ${action ? 'text-white' : 'text-slate-600'}`}>Premera Attention required: {action}</span>
       </button>
     </div>

@@ -3,9 +3,13 @@
 // vp@premera.com (Premera VP: several operational areas) and director@premera.com (one area).
 //
 //   npm run demo              # web: the header sections first, then each page in detail (VP, then Director)
+//                               starts 10 s after the browser opens
 //   npm run demo:phone        # phone: the same portal, laid out like the mobile app (VP, then Director)
+//                               opens with DevTools and waits 15 s: turn on the device toolbar
+//                               (Ctrl+Shift+M) and pick the device, then it starts
 //
-//   DEMO_DEVICE="iPhone 16 Pro"   any Playwright device name for demo:phone (default iPhone 16 Pro)
+//   DEMO_DEVICE="iPhone 16 Pro"   demo:phone without DevTools: Playwright emulates this device instead
+//   DEMO_START_WAIT=20             a different start pause, in seconds
 //   DEMO_URL=http://localhost:5173   another server (default: the live portal)
 //   DEMO_SPEED=1.5                   slower (1 = default pace, 0.7 = faster)
 //   DEMO_SEND=1                      also sends the sample reply / thumbs-up (writes data)
@@ -20,7 +24,8 @@ import { chromium, devices } from '@playwright/test'
 const BASE = (process.env.DEMO_URL ?? 'http://10.100.242.71:8082').replace(/\/$/, '')
 const SEND = process.env.DEMO_SEND === '1'
 const PHONE = process.argv.includes('--phone')
-const DEVICE = process.env.DEMO_DEVICE ?? 'iPhone 16 Pro'
+// Unset: you choose the device yourself in DevTools during the start pause. Set: Playwright emulates it.
+const DEVICE = process.env.DEMO_DEVICE ?? ''
 const SPEED = Number(process.env.DEMO_SPEED ?? 1) || 1
 const pause = (ms) => new Promise((r) => setTimeout(r, ms * SPEED))
 
@@ -431,22 +436,41 @@ export async function runPhone(page) {
   await caption(page, '', 0)
 }
 
+/** A fixed (not DEMO_SPEED-scaled) wait before the demo starts, with a countdown in the terminal. */
+async function startPause(seconds, what) {
+  if (seconds <= 0) return
+  console.log(what)
+  for (let s = seconds; s > 0; s--) {
+    process.stdout.write(`\r  starting in ${s}s `)
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  process.stdout.write('\r  starting now     \n')
+}
+
 async function main() {
-  const browser = await chromium.launch({ headless: process.env.DEMO_HEADLESS === '1', args: PHONE ? [] : ['--start-maximized'] })
-  let page
-  if (PHONE) {
+  const headless = process.env.DEMO_HEADLESS === '1'
+  // Manual phone mode: you pick the device in DevTools' device toolbar during the pause.
+  const manualPhone = PHONE && !DEVICE
+  const wait = Number(process.env.DEMO_START_WAIT ?? (PHONE ? 15 : 10))
+  const browser = await chromium.launch({
+    headless,
+    args: manualPhone ? ['--start-maximized', '--auto-open-devtools-for-tabs'] : PHONE ? [] : ['--start-maximized'],
+  })
+  let context
+  if (PHONE && DEVICE) {
     const device = devices[DEVICE]
     if (!device) throw new Error(`Unknown DEMO_DEVICE "${DEVICE}" — use a Playwright device name such as "iPhone 16 Pro".`)
-    const context = await browser.newContext({ ...device })
-    await prepare(context)
-    page = await context.newPage()
-    await runPhone(page)
+    context = await browser.newContext({ ...device })
   } else {
-    const context = await browser.newContext({ viewport: null })
-    await prepare(context)
-    page = await context.newPage()
-    await runWeb(page)
+    context = await browser.newContext({ viewport: null })
   }
+  await prepare(context)
+  const page = await context.newPage()
+  await startPause(headless ? 0 : wait, manualPhone
+    ? `Phone demo: in DevTools, turn on the device toolbar (Ctrl+Shift+M) and pick the device. Starting in ${wait}s.`
+    : `Starting the ${PHONE ? 'phone' : 'web'} demo in ${wait}s — start your recording.`)
+  if (PHONE) await runPhone(page)
+  else await runWeb(page)
   console.log('Demo finished. Close the browser window when you have stopped recording.')
   await page.waitForEvent('close', { timeout: 0 }).catch(() => {})
   await browser.close()

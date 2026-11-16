@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "demo": "node e2e/demo/client-demo.mjs"
+    "demo": "node e2e/demo/client-demo.mjs",
+    "demo:phone": "node e2e/demo/client-demo.mjs --phone"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

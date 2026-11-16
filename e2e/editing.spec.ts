@@ -116,10 +116,10 @@ test.describe('Client-facing view', () => {
     await expect(page.getByRole('button', { name: 'Add RAID item' })).toBeVisible()
   })
 
-  test('past-due RAID items are tagged Overdue and counted; Premera sees empty-state text for areas not shared', async ({ page, request }) => {
+  test('past-due RAID items are tagged Overdue and the tab counts its RAID; Premera sees empty-state text for areas not shared', async ({ page, request }) => {
     await signInAs(page, request, USERS.premera, '/program')
     // The demo RAID due dates are October 2026.
-    await expect(page.getByText(/^Overdue: \d+/)).toBeVisible()
+    await expect(page.getByText(/^# of RAID: \d+/)).toBeVisible()
     await expect(page.getByText('Overdue', { exact: true }).first()).toBeVisible()
     await page.getByRole('tab', { name: 'Claims Operations (100-400)' }).click()
     await expect(page.getByText('Nothing shared for Claims Operations (100-400) yet.')).toBeVisible()

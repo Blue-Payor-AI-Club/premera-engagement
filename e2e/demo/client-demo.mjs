@@ -1,35 +1,46 @@
-// Client demo walkthrough: opens a real browser and drives the portal at a presenter's pace,
-// with a caption bar and a visible cursor, ready to screen-record.
+// Client demo walkthrough, ready to screen-record: a real browser, a presenter's pace, a caption
+// bar and a visible cursor. It signs in by itself with the two demo accounts (no code needed):
+//
+//   1. Web   — vp@premera.com        (Premera VP: several operational areas)
+//   2. Web   — director@premera.com  (Premera Director: one operational area)
+//   3. Phone — the VP, then the Director (a phone-sized window, the same layout as the mobile app)
 //
 //   npm run demo                         # against the live portal (http://10.100.242.71:8082)
 //   DEMO_URL=http://localhost:5173 npm run demo
+//   DEMO_ONLY=web | phone npm run demo   # just one half
 //   DEMO_SEND=1 npm run demo             # also sends the sample reply / thumbs-up (writes data)
 //   DEMO_SPEED=0.6 npm run demo          # faster (1 = default pace, 2 = twice as slow)
 //
-// You sign in yourself in the window that opens (email + code); the demo starts once the
-// Program Level page loads. Sign in as a UST user to also show "View as Premera".
 // By default nothing is written: the reply is typed but not sent, thumbs are only pointed at.
+// The demo accounts and their tabs live on the server (Super Admin > Tab access).
 
 import { pathToFileURL } from 'node:url'
-import { chromium } from '@playwright/test'
+import { chromium, devices } from '@playwright/test'
 
 const BASE = (process.env.DEMO_URL ?? 'http://10.100.242.71:8082').replace(/\/$/, '')
 const SEND = process.env.DEMO_SEND === '1'
+const ONLY = process.env.DEMO_ONLY ?? ''
 const SPEED = Number(process.env.DEMO_SPEED ?? 1) || 1
 const pause = (ms) => new Promise((r) => setTimeout(r, ms * SPEED))
 
+export const VP = { email: 'vp@premera.com', title: 'Premera VP' }
+export const DIRECTOR = { email: 'director@premera.com', title: 'Premera Director' }
+
 // ─── presenter helpers ───────────────────────────────────────────────────────
 
-/** A caption bar along the bottom and a cursor dot that follows the mouse (re-added on every page load). */
+/** A caption bar and a cursor dot that follows the mouse (re-added on every page load). */
 const OVERLAY = () => {
   const add = () => {
     if (document.getElementById('demo-caption')) return
+    const phone = innerWidth < 640
     const cap = document.createElement('div')
     cap.id = 'demo-caption'
     Object.assign(cap.style, {
-      position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)', zIndex: 2147483647,
-      maxWidth: '80vw', padding: '12px 22px', borderRadius: '12px', background: 'rgba(11,58,83,.94)', color: '#fff',
-      font: '600 18px/1.35 system-ui, sans-serif', boxShadow: '0 8px 30px rgba(0,0,0,.3)', textAlign: 'center',
+      position: 'fixed', left: '50%', transform: 'translateX(-50%)', zIndex: 2147483647,
+      // Phones: above the bottom tab bar, smaller type.
+      bottom: phone ? '84px' : '24px', width: phone ? '92vw' : 'auto', maxWidth: phone ? '92vw' : '80vw',
+      padding: phone ? '10px 14px' : '12px 22px', borderRadius: '12px', background: 'rgba(11,58,83,.94)', color: '#fff',
+      font: `600 ${phone ? 14 : 18}px/1.35 system-ui, sans-serif`, boxShadow: '0 8px 30px rgba(0,0,0,.3)', textAlign: 'center',
       transition: 'opacity .3s', opacity: '0', pointerEvents: 'none',
     })
     const dot = document.createElement('div')
@@ -40,7 +51,10 @@ const OVERLAY = () => {
       transition: 'left .05s linear, top .05s linear, transform .15s',
     })
     document.body.append(cap, dot)
-    addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px` }, true)
+    const move = (x, y) => { dot.style.left = `${x}px`; dot.style.top = `${y}px` }
+    addEventListener('mousemove', (e) => move(e.clientX, e.clientY), true)
+    addEventListener('touchstart', (e) => { const t = e.touches[0]; if (t) move(t.clientX, t.clientY); dot.style.transform = 'scale(.7)' }, true)
+    addEventListener('touchend', () => { dot.style.transform = '' }, true)
     addEventListener('mousedown', () => { dot.style.transform = 'scale(.7)' }, true)
     addEventListener('mouseup', () => { dot.style.transform = '' }, true)
   }
@@ -59,7 +73,7 @@ async function caption(page, text, hold = 2600) {
   if (text) await pause(hold)
 }
 
-/** Scroll into view, glide the cursor over, outline it for a moment; optionally click. */
+/** Scroll into view, glide the cursor over, outline it for a moment; optionally click (tap on phones). */
 async function point(page, locator, { click = false, hold = 900 } = {}) {
   const el = locator.first()
   await el.scrollIntoViewIfNeeded()
@@ -77,43 +91,69 @@ async function point(page, locator, { click = false, hold = 900 } = {}) {
   if (click) await el.click()
 }
 
-async function scrollBy(page, dy, steps = 12) {
-  for (let i = 0; i < steps; i++) {
-    await page.mouse.wheel(0, dy / steps)
-    await pause(60)
-  }
+/** Smooth scroll (works on phones too, where there is no mouse wheel). */
+async function scrollBy(page, dy, wait = 900) {
+  await page.evaluate((y) => scrollBy({ top: y, behavior: 'smooth' }), dy)
+  await pause(wait)
 }
+const toTop = (page) => page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
 
 const visible = async (locator, timeout = 4000) => locator.first().waitFor({ state: 'visible', timeout }).then(() => true, () => false)
 
-// ─── the demo ────────────────────────────────────────────────────────────────
+// ─── sign in / out ───────────────────────────────────────────────────────────
 
-async function programLevel(page) {
-  await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
-  await caption(page, 'Transition Summary Portal — one place for the transition program status, shared by UST and Premera', 3500)
-  await point(page, page.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' }))
-  await caption(page, 'The status key sits on top, so every colour on the page reads the same way')
-  await point(page, page.getByText('On Track', { exact: true }))
+async function signIn(page, who) {
+  await page.goto(`${BASE}/program`)
+  const email = page.getByPlaceholder('you@company.com')
+  await email.waitFor({ timeout: 60_000 })
+  await caption(page, `Signing in as the ${who.title} — demo accounts need no sign-in code`, 1800)
+  await point(page, email, { click: true, hold: 300 })
+  await email.pressSequentially(who.email, { delay: 55 * SPEED })
+  await pause(500)
+  await point(page, page.getByRole('button', { name: 'Send sign-in code' }), { click: true, hold: 400 })
+  await page.getByRole('heading', { level: 1, name: 'Transition Status Dashboard' }).waitFor({ timeout: 60_000 })
+  await caption(page, '', 0)
+  await pause(1200)
+}
+
+async function signOut(page) {
+  await toTop(page)
+  await point(page, page.getByRole('button', { name: 'Account menu' }), { click: true, hold: 400 })
+  await pause(500)
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await page.getByPlaceholder('you@company.com').waitFor()
+  await pause(800)
+}
+
+// ─── the walkthrough ─────────────────────────────────────────────────────────
+
+/** Program Level: header, KPIs, RAID badges, the user's tabs, then one tab in depth. */
+async function programLevel(page, who, { full }) {
+  const phone = (page.viewportSize()?.width ?? 1280) < 640
+  await toTop(page)
+  if (full) await caption(page, 'Transition Status Portal — the transition program status, shared by UST and Premera', 3200)
+  await caption(page, 'The status key sits right under the As-Of date, so every colour reads the same way')
+  await point(page, page.getByRole('group', { name: 'Status key' }), { hold: 1300 })
   await caption(page, "KPI cards: the selected area's phases and milestones, counted by status")
-  await point(page, page.getByRole('group', { name: 'Status counts' }), { hold: 1500 })
+  await point(page, page.getByRole('group', { name: 'Status counts' }), { hold: 1300 })
+  await caption(page, '# of RAID is every RAID item in the area; Premera Attention required counts the ones Premera needs to act on')
+  await point(page, page.getByText(/# of RAID:/), { hold: 900 })
+  await point(page, page.getByText(/Premera Attention required:/), { hold: 1200 })
 
   const tabs = page.getByRole('tab')
-  await caption(page, 'One tab per operational area — Service Desk, Claims, Provider Data Management and more')
-  await point(page, page.getByRole('tablist', { name: 'Operational area' }), { hold: 1500 })
-
-  // Walk a few areas that have content, then come back to the first.
   const names = await tabs.allTextContents()
-  let shown = 0
-  for (const name of names) {
-    if (shown === 3) break
-    await point(page, tabs.filter({ hasText: name }), { click: true, hold: 500 })
-    await pause(900)
-    if (await visible(page.getByText(`Nothing shared for ${name} yet.`), 800)) continue
-    shown++
-    await caption(page, `${name}: its own overall status, summary, phase dashboard and RAID log`, 2200)
+  await caption(page, names.length > 1
+    ? `The ${who.title} sees only the operational areas they lead: ${names.length} here`
+    : `The ${who.title} sees only the one operational area they lead`, 3000)
+  await point(page, page.getByRole('tablist', { name: 'Operational area' }), { hold: 1200 })
+  for (const name of names.slice(1, full ? 3 : 1)) {
+    await point(page, tabs.filter({ hasText: name }), { click: true, hold: 400 })
+    await pause(1600)
   }
-  await point(page, tabs.first(), { click: true, hold: 400 })
-  await pause(800)
+  if (names.length > 1) {
+    await point(page, tabs.first(), { click: true, hold: 300 })
+    await pause(1000)
+  }
 
   const card = page.getByRole('region', { name: /^Transition Program Summary - / })
   if (await visible(card)) {
@@ -121,25 +161,36 @@ async function programLevel(page) {
     await point(page, card, { hold: 1500 })
   }
 
-  const grid = page.locator('[data-tour="workstream-grid"]')
-  if (await visible(grid)) {
-    await caption(page, 'The Transition Program Dashboard: each phase with its status, dates and milestones')
-    await point(page, grid, { hold: 1200 })
-    const phase = grid.locator('.ag-row').filter({ hasText: 'Discovery & Planning' })
-    if (await visible(phase)) {
-      await caption(page, 'Click a phase to see its details and its milestones')
-      await point(page, phase.getByText('Discovery & Planning'), { click: true })
-      await pause(2800)
-      await page.keyboard.press('Escape')
-      await pause(600)
+  const dashboard = page.getByRole('region', { name: 'Transition Program Dashboard' })
+  if (await visible(dashboard)) {
+    await caption(page, 'Its dashboard: each phase with its status, dates and milestones')
+    await point(page, dashboard, { hold: 1000 })
+    if (phone) {
+      // Phone cards: open the first phase's milestones in place.
+      const more = dashboard.locator('summary').first()
+      if (await visible(more, 1500)) {
+        await point(page, more, { click: true, hold: 500 })
+        await pause(2200)
+      }
+    } else {
+      const phase = dashboard.locator('.ag-row').filter({ hasText: 'Transition / KT' })
+      if (await visible(phase, 2000)) {
+        await caption(page, 'Click a phase for its details and milestones')
+        await point(page, phase.getByText('Transition / KT').first(), { click: true })
+        await pause(2800)
+        await page.keyboard.press('Escape')
+        await pause(600)
+      }
     }
   }
 
   const raid = page.locator('#tab-raid')
   if (await visible(raid)) {
-    await caption(page, "Below it, the area's RAID log — risks, assumptions, issues and dependencies")
+    await caption(page, "Then the area's RAID log — items needing Premera's action are tagged in red")
     await point(page, raid, { hold: 1200 })
-    await raidFeedback(page, raid)
+    const tag = raid.getByText('Action required')
+    if (await visible(tag, 1500)) await point(page, tag, { hold: 1200 })
+    if (full) await raidFeedback(page, raid)
   }
 }
 
@@ -172,43 +223,25 @@ async function raidFeedback(page, scope) {
   await pause(600)
 }
 
-async function premeraView(page) {
-  const btn = page.getByRole('button', { name: 'View as Premera' })
-  if (!(await visible(btn, 1500))) return
-  await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
-  await caption(page, "UST decides what's shared: “View as Premera” shows exactly what Premera sees")
-  await point(page, btn, { click: true })
-  await pause(2500)
-  await scrollBy(page, 500)
-  await pause(1200)
-  await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
-  await pause(600)
-  await point(page, page.getByRole('button', { name: 'Exit preview' }), { click: true })
-  await pause(1000)
-}
-
-async function report(page) {
+async function report(page, { full }) {
+  await toTop(page)
   await caption(page, 'The Transition Summary Report: the program-wide view, in the familiar slide format')
-  await point(page, page.getByRole('link', { name: 'Transition Summary Report' }), { click: true })
+  await point(page, page.getByRole('link', { name: 'Transition Summary Report' }).filter({ visible: true }), { click: true })
   await page.getByRole('heading', { level: 1, name: 'Transition Summary Report' }).waitFor()
   await pause(1200)
-
   const toggle = page.getByRole('button', { name: /Transition Program Executive Summary/ })
   if (await visible(toggle)) {
     await caption(page, 'The Executive Summary: overall status, accomplishments, priorities, key risks and where executive focus is needed', 3200)
-    await point(page, toggle, { hold: 800 })
-    await scrollBy(page, 650, 20)
-    await pause(1500)
+    await point(page, toggle, { hold: 600 })
+    await scrollBy(page, 650, 1600)
   }
-
+  if (!full) return
   const dash = page.getByRole('region', { name: 'Transition Program Dashboard' })
   if (await visible(dash)) {
-    await caption(page, 'The program dashboard in its original format: tower, workstream, planning, onboarding and transition dates')
+    await caption(page, 'The program dashboard in its original format, limited to the areas this user leads')
     await point(page, dash.getByText('Discovery / Planning / Onboarding'), { hold: 1500 })
-    await scrollBy(page, 450, 15)
-    await pause(1200)
+    await scrollBy(page, 450, 1200)
   }
-
   const raid = page.getByRole('region', { name: 'RAID log' }).last()
   if (await visible(raid)) {
     await caption(page, 'And the program-wide RAID items, with the same thumbs and reply thread')
@@ -217,9 +250,9 @@ async function report(page) {
 }
 
 async function feedback(page) {
-  await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
+  await toTop(page)
   await caption(page, 'Feedback to UST: a direct line for anything else')
-  await point(page, page.getByRole('link', { name: 'Feedback to UST' }), { click: true })
+  await point(page, page.getByRole('link', { name: 'Feedback to UST' }).filter({ visible: true }), { click: true })
   await pause(1500)
   const stars = page.getByLabel('4 stars')
   if (await visible(stars)) {
@@ -231,9 +264,29 @@ async function feedback(page) {
     await pause(1500)
     await subject.fill('') // nothing is submitted in the demo
   }
-  await scrollBy(page, 500)
-  await caption(page, 'Every submission is listed here, searchable and filterable', 2400)
 }
+
+/** Phones: the same content, laid out like the mobile app (bottom tab bar, stacked cards). */
+async function phoneTour(page, who, { full }) {
+  await caption(page, `On a phone, the ${who.title} gets the same portal, laid out like the mobile app`, 2800)
+  await programLevel(page, who, { full: false })
+  await scrollBy(page, 500, 1200)
+  if (full) {
+    await caption(page, 'Sections sit in a bottom tab bar, as in the app')
+    const bar = page.getByRole('navigation', { name: 'Sections' })
+    await point(page, bar, { hold: 1000 })
+    await point(page, bar.getByRole('link', { name: 'Transition Summary Report' }), { click: true })
+    await page.getByRole('heading', { level: 1, name: 'Transition Summary Report' }).waitFor()
+    await pause(1200)
+    await scrollBy(page, 600, 1500)
+    await point(page, bar.getByRole('link', { name: 'Feedback to UST' }), { click: true })
+    await pause(1800)
+    await point(page, bar.getByRole('link', { name: 'Program Level' }), { click: true })
+    await pause(1200)
+  }
+}
+
+// ─── runners ─────────────────────────────────────────────────────────────────
 
 /** Caption bar + cursor on every page; no onboarding tour. */
 export async function prepare(context) {
@@ -241,33 +294,52 @@ export async function prepare(context) {
   await context.addInitScript(() => { try { localStorage.setItem('ustpremera_tour_v3', 'done') } catch { /* private mode */ } })
 }
 
-/** The walkthrough, starting on a signed-in Program Level page. */
-export async function runDemo(page) {
-  await programLevel(page)
-  await premeraView(page)
-  await report(page)
+/** Web: the VP in depth, then the Director, in one window. */
+export async function runWeb(page) {
+  await signIn(page, VP)
+  await programLevel(page, VP, { full: true })
+  await report(page, { full: true })
   await feedback(page)
-  await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' }))
-  await caption(page, 'Transition Summary Portal — live status, shared decisions, one source of truth', 4000)
+  await signOut(page)
+
+  await signIn(page, DIRECTOR)
+  await programLevel(page, DIRECTOR, { full: false })
+  await report(page, { full: false })
+  await signOut(page)
+}
+
+/** Phone: the VP, then the Director. */
+export async function runPhone(page) {
+  await signIn(page, VP)
+  await phoneTour(page, VP, { full: true })
+  await signOut(page)
+  await signIn(page, DIRECTOR)
+  await phoneTour(page, DIRECTOR, { full: false })
+  await toTop(page)
+  await caption(page, 'Transition Status Portal — live status, shared decisions, one source of truth', 4000)
   await caption(page, '', 0)
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: false, args: ['--start-maximized'] })
-  const context = await browser.newContext({ viewport: null })
-  await prepare(context)
-  const page = await context.newPage()
+  const browser = await chromium.launch({ headless: process.env.DEMO_HEADLESS === '1', args: ['--start-maximized'] })
 
-  await page.goto(`${BASE}/program`)
-  console.log('Sign in in the browser window; the demo starts when Program Level loads.')
-  await caption(page, 'Sign in to start the demo', 0)
-  await page.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' }).waitFor({ timeout: 10 * 60_000 })
-  await caption(page, '', 0)
-  await pause(1500)
+  if (ONLY !== 'phone') {
+    const context = await browser.newContext({ viewport: null })
+    await prepare(context)
+    const page = await context.newPage()
+    await runWeb(page)
+    await context.close()
+  }
 
-  await runDemo(page)
-  console.log('Demo finished. Close the browser window when you have stopped recording.')
-  await page.waitForEvent('close', { timeout: 0 }).catch(() => {})
+  if (ONLY !== 'web') {
+    // A phone-sized window (iPhone 14), touch and all.
+    const context = await browser.newContext({ ...devices['iPhone 14'] })
+    await prepare(context)
+    const page = await context.newPage()
+    await runPhone(page)
+    console.log('Demo finished. Close the browser window when you have stopped recording.')
+    await page.waitForEvent('close', { timeout: 0 }).catch(() => {})
+  }
   await browser.close()
 }
 

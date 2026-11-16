@@ -3,15 +3,17 @@ import type { Permission } from './authApi'
 export interface NavItem {
   to: string
   label: string
+  /** Phones' bottom tab bar label. */
+  short?: string
   /** Required to see the link AND to open the route (see RequirePermission). Omitted = everyone signed in. */
   permission?: Permission
 }
 
 /** The three sections every signed-in user sees. */
 export const PRIMARY_NAV: NavItem[] = [
-  { to: '/program', label: 'Program Level' },
-  { to: '/feedback', label: 'Feedback to UST' },
-  { to: '/report', label: 'Transition Summary Report' },
+  { to: '/program', label: 'Program Level', short: 'Program' },
+  { to: '/feedback', label: 'Feedback to UST', short: 'Feedback' },
+  { to: '/report', label: 'Transition Summary Report', short: 'Report' },
 ]
 
 /** Management links, shown only to roles that hold the permission. UI gating only —

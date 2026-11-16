@@ -8,7 +8,7 @@ test.beforeAll(async ({ request }) => {
 test.describe('Program Level', () => {
   test('opens on the first operational-area tab with the status key, KPI cards and the tab content', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust)
-    await expect(page.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Transition Status Dashboard' })).toBeVisible()
     await expect(page.getByRole('tab', { name: 'Service Desk and ITOC' })).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByRole('tab')).toHaveCount(11)
     await expect(page.getByRole('group', { name: 'Status counts' })).toBeVisible()
@@ -123,9 +123,10 @@ test.describe('quick feedback (thumbs)', () => {
 
 test('@mobile Program Level is usable on a phone: nav menu toggles and tabs work', async ({ page, request }) => {
   await signInAs(page, request, USERS.ust)
-  await page.getByRole('button', { name: 'Toggle menu' }).click()
-  await expect(page.getByRole('link', { name: 'Transition Summary Report' }).last()).toBeVisible()
-  await page.getByRole('button', { name: 'Toggle menu' }).click()
+  // Sections are a bottom tab bar on phones, as in the mobile app.
+  const bottom = page.getByRole('navigation', { name: 'Sections' })
+  await expect(bottom).toBeVisible()
+  await expect(bottom.getByRole('link', { name: 'Transition Summary Report' })).toBeVisible()
   await page.getByRole('tab', { name: 'Database Administration' }).click()
   await expect(page.getByRole('tab', { name: 'Database Administration' })).toHaveAttribute('aria-selected', 'true')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)

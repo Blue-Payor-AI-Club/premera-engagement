@@ -84,6 +84,8 @@ export interface RaidItem {
   workstream?: string
   /** Premera stakeholders only receive rows where this is true. */
   needsPremeraAttention?: boolean
+  /** Premera must act on it: counted in the tab's "Premera Attention required" badge. */
+  premeraActionRequired?: boolean
 }
 
 export interface TransitionData {

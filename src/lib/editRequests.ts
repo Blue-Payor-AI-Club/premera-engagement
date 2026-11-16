@@ -490,6 +490,7 @@ export function raidRequest(t: TransitionData, index?: number, workstream?: stri
         options: [...new Set([...t.dashboard.map((w) => w.workstream), ...(r?.workstream ? [r.workstream] : [])])].map((n) => ({ value: n, label: n })),
       },
       ATTENTION,
+      ACTION_REQUIRED,
     ],
     value: r ? { ...r } : { type: 'R', status: 'Open', workstream },
     save: (d, v) => {
@@ -499,6 +500,7 @@ export function raidRequest(t: TransitionData, index?: number, workstream?: stri
         owner: str(v.owner), dueDate: str(v.dueDate), status: str(v.status),
         ...(str(v.workstream) ? { workstream: str(v.workstream) } : {}),
         needsPremeraAttention: flag(v.needsPremeraAttention),
+        premeraActionRequired: flag(v.premeraActionRequired),
       }
       const list = tr(d).raid
       if (r) list[index!] = next

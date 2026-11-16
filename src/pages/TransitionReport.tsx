@@ -1,5 +1,4 @@
 import SlideHeader from '../components/SlideHeader'
-import Legend from '../components/Legend'
 import TransitionTab from '../components/transition/TransitionTab'
 import { TRANSITION_DATA } from '../data/transitionData'
 import { usePortalData } from '../context/PortalDataContext'
@@ -11,8 +10,7 @@ export default function TransitionReport() {
   const transition = data.transition ?? TRANSITION_DATA
   return (
     <div className="slide">
-      <SlideHeader title="Transition Summary Report" sampleLines={[]} asOf={transition.asOf} edit={() => transitionHeaderRequest(transition)} />
-      <div className="mb-6"><Legend /></div>
+      <SlideHeader title="Transition Summary Report" sampleLines={[]} asOf={transition.asOf} edit={() => transitionHeaderRequest(transition)} legend />
       <TransitionTab data={transition} />
     </div>
   )

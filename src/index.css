@@ -28,16 +28,17 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
 }
 
-.slide {
-  background: var(--card-bg);
-  border: 1px solid rgba(11,36,64,.07);
-  border-radius: 16px;
-  padding: 18px 16px;
-  box-shadow: 0 1px 2px rgba(11,36,64,.04), 0 12px 30px -12px rgba(11,36,64,.14);
-}
+/* Phones: no outer card, as in the mobile app; the page's own cards sit on the surface. */
+.slide { padding: 0; }
 
 @media (min-width: 640px) {
-  .slide { padding: 28px 32px; }
+  .slide {
+    background: var(--card-bg);
+    border: 1px solid rgba(11,36,64,.07);
+    border-radius: 16px;
+    padding: 28px 32px;
+    box-shadow: 0 1px 2px rgba(11,36,64,.04), 0 12px 30px -12px rgba(11,36,64,.14);
+  }
 }
 
 /* hide horizontal scrollbar on the nav strip while keeping it scrollable */

@@ -1,7 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ListChecks } from 'lucide-react'
 import SlideHeader from '../components/SlideHeader'
-import Legend from '../components/Legend'
 import StatusChip from '../components/transition/StatusChip'
 import { RaidGrid, WorkstreamDashboard } from '../components/transition/TransitionDashboard'
 import { PROGRAM_TABS, overallStatus, raidDone, sameName, statusCounts, tabWorkstream } from '../lib/programTabs'
@@ -10,7 +9,6 @@ import { TRANSITION_DATA, type TransitionData, type TransitionWorkstream } from 
 import { LEGEND_ORDER, STATUS } from '../data/status'
 import { usePortalData } from '../context/PortalDataContext'
 import { useAuth } from '../context/AuthContext'
-import { isOverdue } from '../lib/format'
 import { transitionHeaderRequest, transitionWorkstreamRequest } from '../lib/editRequests'
 
 // Program Level (Neeta's review, set 1, 2026-11-11): one tab per operational area, each showing
@@ -20,35 +18,39 @@ import { transitionHeaderRequest, transitionWorkstreamRequest } from '../lib/edi
 function KpiCards({ w }: { w: TransitionWorkstream | undefined }) {
   const counts = statusCounts(w)
   return (
-    <div data-tour="scorecard" aria-label="Status counts" role="group" className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+    // One row of five on every width; on phones the tiles shrink to number-over-label, as in the app.
+    <div data-tour="scorecard" aria-label="Status counts" role="group" className="grid grid-cols-5 gap-1.5 sm:gap-3 mb-4">
       {LEGEND_ORDER.map((k) => (
-        <div key={k} className="rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-3 border-l-4" style={{ borderLeftColor: STATUS[k].color }}>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{STATUS[k].label}</div>
-          <div className="text-2xl font-bold text-slate-800" aria-label={`${STATUS[k].label}: ${counts[k]}`}>{counts[k]}</div>
+        <div key={k} className="rounded-lg sm:rounded-xl border border-slate-200 bg-white shadow-sm px-1.5 py-2 sm:px-4 sm:py-3 border-t-4 sm:border-t sm:border-l-4 text-center sm:text-left" style={{ borderTopColor: STATUS[k].color, borderLeftColor: STATUS[k].color }}>
+          <div className="text-xl sm:text-2xl font-bold text-slate-800 sm:order-2" aria-label={`${STATUS[k].label}: ${counts[k]}`}>{counts[k]}</div>
+          <div className="text-[10px] sm:text-xs font-semibold uppercase leading-tight tracking-wide text-slate-500">{STATUS[k].label}</div>
         </div>
       ))}
     </div>
   )
 }
 
-function RiskBadges({ data, name }: { data: TransitionData; name: string | undefined }) {
-  const items = name ? data.raid.filter((r) => sameName(r.workstream, name)) : []
-  const open = items.filter((r) => (r.type === 'R' || r.type === 'I') && !raidDone(r)).length
-  const overdue = items.filter((r) => isOverdue(r.dueDate, raidDone(r))).length
-  if (!open && !overdue) return null
+/** The tab's RAID count and how many need Premera to act (the RAID items' Premera Action Required). */
+function RaidBadges({ data, name }: { data: TransitionData; name: string | undefined }) {
+  if (!name) return null
+  const items = data.raid.filter((r) => sameName(r.workstream, name))
+  const action = items.filter((r) => r.premeraActionRequired && !raidDone(r)).length
   const toRaid = () => document.getElementById('tab-raid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   return (
-    <div className="flex flex-col sm:flex-row gap-2 mb-4">
-      <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100 border border-amber-200 hover:bg-amber-200 transition">
-        <AlertTriangle size={13} className="text-amber-500 shrink-0" />
-        <span className="text-xs font-semibold text-amber-800">Risks &amp; Issues: <span className="text-amber-600">{open}</span></span>
+    <div className="flex flex-wrap gap-2 mb-4">
+      <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-50 border border-sky-200 hover:bg-sky-100 transition">
+        <ListChecks size={13} className="text-[#0067b1] shrink-0" />
+        <span className="text-xs font-semibold text-[#0b3a53]"># of RAID: <span className="text-[#0067b1]">{items.length}</span></span>
       </button>
-      {overdue > 0 && (
-        <button type="button" onClick={toRaid} title="Go to this tab's RAID log" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 border border-red-600 hover:bg-red-700 transition">
-          <AlertTriangle size={13} className="text-white shrink-0" />
-          <span className="text-xs font-semibold text-white">Overdue: {overdue}</span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={toRaid}
+        title="RAID items Premera needs to act on"
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition ${action ? 'bg-red-600 border-red-600 hover:bg-red-700' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+      >
+        <AlertTriangle size={13} className={`shrink-0 ${action ? 'text-white' : 'text-slate-400'}`} />
+        <span className={`text-xs font-semibold ${action ? 'text-white' : 'text-slate-600'}`}>Premera Attention required: {action}</span>
+      </button>
     </div>
   )
 }
@@ -84,13 +86,6 @@ function TabContent({ data, tab, index }: { data: TransitionData; tab: string; i
       </section>
 
       <section className="space-y-4" aria-label="Transition Program Dashboard">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#0b3a53] text-white px-4 sm:px-6 py-4">
-          <h2 className="text-lg sm:text-xl font-semibold tracking-tight">Transition Program Dashboard</h2>
-          <span className="rounded-full bg-[#0ea5e9] px-4 py-1 text-right leading-tight">
-            <span className="block text-[10px] tracking-widest font-semibold text-white/90">AS OF:</span>
-            <span className="block text-sm font-semibold">{data.asOf}</span>
-          </span>
-        </div>
         <div data-tour="workstream-grid" className="card overflow-hidden">
           <WorkstreamDashboard data={data} index={index} />
         </div>
@@ -119,15 +114,15 @@ export default function ProgramLevel() {
   return (
     <div className="slide">
       <SlideHeader
-        title="Transition Summary Dashboard"
+        title="Transition Status Dashboard"
         sampleLines={[]}
         asOf={transition.asOf}
         edit={() => transitionHeaderRequest(transition)}
+        legend
       />
 
-      <div className="mb-4"><Legend /></div>
       <KpiCards w={w} />
-      <RiskBadges data={transition} name={w?.workstream} />
+      <RaidBadges data={transition} name={w?.workstream} />
 
       {/* Material-style tabs: equal shares of the full width, an underline on the selected one.
           Phones scroll sideways instead of squeezing 11 labels into 360px. */}

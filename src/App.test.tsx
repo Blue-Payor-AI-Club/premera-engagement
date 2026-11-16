@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import App from './App'
@@ -25,7 +25,8 @@ function renderAt(path: string, role: Role | null, name?: string) {
   )
 }
 
-const link = (name: RegExp) => screen.queryByRole('link', { name })
+// The section links render twice (top bar, and the phones' bottom tab bar); CSS shows one.
+const link = (name: RegExp) => screen.queryAllByRole('link', { name })[0] ?? null
 const manage = (name: RegExp) => screen.queryByRole('menuitem', { name })
 const openAccountMenu = () => userEvent.click(screen.getByRole('button', { name: /account menu/i }))
 
@@ -54,6 +55,9 @@ describe('App shell — navigation by role', () => {
     expect(manage(/activity/i)).toBeNull()
     expect(manage(/super admin/i)).toBeNull()
     expect(screen.getAllByText(/premera stakeholder/i).length).toBeGreaterThan(0)
+    // Phones: a bottom tab bar with the three sections, as in the mobile app.
+    const bottom = screen.getByRole('navigation', { name: 'Sections' })
+    expect(within(bottom).getAllByRole('link').map((a) => a.textContent)).toEqual(['Program', 'Feedback', 'Report'])
   })
 
   it('addresses the signed-in user by first name, and falls back to the email when there is no name', async () => {

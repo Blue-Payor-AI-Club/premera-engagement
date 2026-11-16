@@ -43,7 +43,8 @@ const synced: TransitionData = {
     ws('Claims Operations'),
   ],
   raid: [
-    { type: 'R', description: 'Service desk risk', mitigation: [], owner: 'A', dueDate: '1/1/2020', status: 'Open', workstream: 'service desk and itoc' },
+    { type: 'R', description: 'Service desk risk', mitigation: [], owner: 'A', dueDate: '1/1/2020', status: 'Open', workstream: 'service desk and itoc', premeraActionRequired: true },
+    { type: 'A', description: 'Service desk assumption', mitigation: [], owner: 'A', dueDate: '', status: 'Closed', workstream: 'Service Desk and ITOC', premeraActionRequired: true },
     { type: 'I', description: 'Claims issue', mitigation: [], owner: 'B', dueDate: '', status: 'Open', workstream: 'Claims Operations' },
     { type: 'R', description: 'Program-wide risk', mitigation: [], owner: 'C', dueDate: '', status: 'Open' },
   ],
@@ -52,7 +53,7 @@ const synced: TransitionData = {
 describe('/program — one tab per operational area', () => {
   it('has the static title and the operational-area tabs, in order, with no ITO / BPO / Transition', () => {
     renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
-    expect(screen.getByRole('heading', { level: 1, name: 'Transition Summary Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Transition Status Dashboard' })).toBeInTheDocument()
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(PROGRAM_TABS)
     expect(PROGRAM_TABS.filter((t) => t === 'Provider Data Management')).toHaveLength(1)
     expect(screen.queryByText(/Program Scorecard/)).toBeNull()
@@ -65,7 +66,10 @@ describe('/program — one tab per operational area', () => {
     expect(within(kpis).getByLabelText('On Track: 2')).toBeInTheDocument()
     expect(within(kpis).getByLabelText('Complete: 1')).toBeInTheDocument()
     expect(within(kpis).getByLabelText('Not Started: 0')).toBeInTheDocument()
-    expect(screen.getByText('Status').compareDocumentPosition(kpis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The status key sits in the header (under the As-Of date), before the KPI cards.
+    const key = screen.getByRole('group', { name: 'Status key' })
+    expect(key.closest('header')).not.toBeNull()
+    expect(key.compareDocumentPosition(kpis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it("shows the tab's title card, overall status and text, its dashboard and only its RAID items", async () => {
@@ -75,12 +79,15 @@ describe('/program — one tab per operational area', () => {
     expect(within(card).getByText('Service desk KT on plan.')).toBeInTheDocument()
     const dash = screen.getByRole('region', { name: 'Transition Program Dashboard' })
     expect(within(dash).queryByText(/Overall:/)).toBeNull() // not repeated
-    expect(within(dash).getByText('12/25/26')).toBeInTheDocument()
+    // No "Transition Program Dashboard" strip and no As-Of repeat: the header has the date.
+    expect(within(dash).queryByRole('heading', { name: 'Transition Program Dashboard' })).toBeNull()
+    expect(within(dash).queryByText('12/25/26')).toBeNull()
     expect(await screen.findByText('Service desk risk')).toBeInTheDocument()
     expect(screen.queryByText('Claims issue')).toBeNull()
     expect(screen.queryByText('Program-wide risk')).toBeNull()
-    expect(screen.getByText(/Risks & Issues:/)).toHaveTextContent('Risks & Issues: 1')
-    expect(screen.getByText('Overdue: 1')).toBeInTheDocument()
+    // Every RAID item of the tab; Premera Attention counts the open ones Premera must act on.
+    expect(screen.getByText(/# of RAID:/)).toHaveTextContent('# of RAID: 2')
+    expect(screen.getByText(/Premera Attention required:/)).toHaveTextContent('Premera Attention required: 1')
   })
 
   it('switching tabs switches everything to that area; an unset status is worked out from the phases', async () => {
@@ -90,14 +97,14 @@ describe('/program — one tab per operational area', () => {
     expect(within(card).getByText('Overall: At Risk')).toBeInTheDocument()
     expect(await screen.findByText('Claims issue')).toBeInTheDocument()
     expect(screen.queryByText('Service desk risk')).toBeNull()
-    expect(screen.queryByText(/Overdue:/)).toBeNull()
+    expect(screen.getByText(/Premera Attention required:/)).toHaveTextContent('Premera Attention required: 0')
   })
 
   it('a tab with nothing behind it says so', async () => {
     renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Employer Portal Project' }))
     expect(screen.getByText('Nothing shared for Employer Portal Project yet.')).toBeInTheDocument()
-    expect(screen.queryByText(/Risks & Issues:/)).toBeNull()
+    expect(screen.queryByText(/# of RAID:/)).toBeNull()
   })
 
   it('a Premera Executive / Lead gets only their tabs, opening on the first of them', () => {

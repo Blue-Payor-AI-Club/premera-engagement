@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import UstViewNotice from './components/UstViewNotice'
-import { Menu, X, BarChart3, MessageSquareText, ChevronRight, LayoutGrid } from 'lucide-react'
+import { X, BarChart3, MessageSquareText, ChevronRight, LayoutGrid, FileText } from 'lucide-react'
 import './index.css'
 import ProgramLevel from './pages/ProgramLevel'
 import Feedback from './pages/Feedback'
@@ -332,8 +332,6 @@ function LiveClock() {
 }
 
 function TopBar() {
-  const [menuOpen, setMenuOpen] = useState(false)
-
   return (
     <nav data-tour="topbar" className="sticky top-0 z-[9996] bg-white/90 backdrop-blur border-b border-slate-200">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
@@ -347,7 +345,7 @@ function TopBar() {
             <img src="/pbc_logo.svg" alt="Premera Blue Cross" className="h-6 w-auto max-w-[110px] object-contain" />
           </div>
           <div className="ml-1 leading-tight hidden lg:block">
-            <div className="text-sm font-bold text-slate-800">Transition Summary Portal</div>
+            <div className="text-sm font-bold text-slate-800">Transition Status Portal</div>
             <div className="text-[11px] text-slate-400">UST · Premera Blue Cross</div>
           </div>
         </div>
@@ -374,36 +372,35 @@ function TopBar() {
             <LiveClock />
           </div>
           <UserMenu />
-          {/* mobile hamburger */}
-          <button
-            className="md:hidden p-2 rounded-md text-slate-600 hover:bg-slate-100 transition"
-            onClick={() => setMenuOpen(v => !v)}
-            aria-label="Toggle menu"
-          >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
         </div>
       </div>
 
-      {/* mobile dropdown nav */}
-      {menuOpen && (
-        <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3 flex flex-col gap-1">
-          {NAV.map((n) => (
+    </nav>
+  )
+}
+
+const NAV_ICON: Record<string, typeof LayoutGrid> = { '/program': LayoutGrid, '/feedback': MessageSquareText, '/report': FileText }
+
+/** Phones: a bottom tab bar, as in the mobile app (the top bar keeps the brand and the account menu). */
+function BottomNav() {
+  return (
+    <nav aria-label="Sections" className="md:hidden fixed inset-x-0 bottom-0 z-[9995] border-t border-slate-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+      <div className="grid grid-cols-3">
+        {NAV.map((n) => {
+          const Icon = NAV_ICON[n.to] ?? LayoutGrid
+          return (
             <NavLink
               key={n.to}
               to={n.to}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `block px-3 py-2.5 rounded-md text-sm font-medium transition ${
-                  isActive ? 'bg-[#e7f1fa] text-[#0067b1]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`
-              }
+              aria-label={n.label}
+              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition ${isActive ? 'text-[#0067b1]' : 'text-[#566a7e]'}`}
             >
-              {n.label}
+              <Icon size={22} aria-hidden />
+              {n.short ?? n.label}
             </NavLink>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
     </nav>
   )
 }
@@ -429,7 +426,7 @@ function AuthenticatedApp() {
     <div className="min-h-screen">
       <TourGuide />
       <TopBar />
-      <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 sm:py-8">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-5 pb-24 sm:py-8">
         <UstViewNotice />
         <Routes>
           <Route path="/" element={<Navigate to="/program" replace />} />
@@ -444,6 +441,7 @@ function AuthenticatedApp() {
           <Route path="*" element={<Navigate to="/program" replace />} />
         </Routes>
       </main>
+      <BottomNav />
     </div>
   )
 }

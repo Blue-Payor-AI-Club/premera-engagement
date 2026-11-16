@@ -166,10 +166,10 @@ describe('Phase dashboard (one Program Level tab, or all workstreams)', () => {
     expect(within(dialog).getAllByText('SOW approved').length).toBeGreaterThan(0)
   })
 
-  it('shows just one workstream, with no filter, when given its index', async () => {
+  it('shows just one workstream, with no filter and no name row (the tab title names it), when given its index', async () => {
     render(<WorkstreamDashboard data={TRANSITION_DATA} index={1} />)
-    expect((await within(grid()).findAllByText(TRANSITION_DATA.dashboard[1].workstream)).length).toBeGreaterThan(0)
-    expect(within(grid()).getAllByText('Reverse Shadow')).toHaveLength(1)
+    expect(await within(grid()).findAllByText('Reverse Shadow')).toHaveLength(1)
+    expect(within(grid()).queryByText(TRANSITION_DATA.dashboard[1].workstream)).toBeNull()
     expect(screen.queryByLabelText('Workstream')).toBeNull()
   })
 })

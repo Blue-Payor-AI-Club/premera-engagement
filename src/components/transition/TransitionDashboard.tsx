@@ -70,12 +70,13 @@ function WorkstreamHeading({ data, w, wi, className }: { data: TransitionData; w
   )
 }
 
-function PhaseGrid({ data, workstreams }: { data: TransitionData; workstreams: Shown }) {
+/** `headings`: a row per workstream name (all workstreams); off on a Program Level tab, whose title already names it. */
+function PhaseGrid({ data, workstreams, headings }: { data: TransitionData; workstreams: Shown; headings: boolean }) {
   const canEdit = !!useEditor()
   const rows = useMemo<DashRow[]>(() => workstreams.flatMap(({ w, wi }) => [
-    { kind: 'workstream' as const, id: `ws:${wi}`, w, wi },
+    ...(headings ? [{ kind: 'workstream' as const, id: `ws:${wi}`, w, wi }] : []),
     ...w.phases.map((p) => ({ kind: 'phase' as const, id: p.id, w, wi, p })),
-  ]), [workstreams])
+  ]), [workstreams, headings])
   const columns = useMemo<ColDef<DashRow>[]>(() => {
     const phase = (r: DashRow) => (r.kind === 'phase' ? r.p : undefined)
     return [
@@ -134,14 +135,14 @@ function PhaseGrid({ data, workstreams }: { data: TransitionData; workstreams: S
 }
 
 /** Phones: each workstream's phases as stacked cards; milestones open in place. */
-function PhaseCards({ data, workstreams }: { data: TransitionData; workstreams: Shown }) {
+function PhaseCards({ data, workstreams, headings }: { data: TransitionData; workstreams: Shown; headings: boolean }) {
   const canEdit = !!useEditor()
   if (!workstreams.length) return <p className="px-3 py-4 text-center text-sm text-slate-400">Nothing shared in this section yet.</p>
   return (
     <div>
       {workstreams.map(({ w, wi }) => (
         <div key={wi} role="group" aria-label={w.workstream}>
-          <WorkstreamHeading data={data} w={w} wi={wi} className="py-2" />
+          {headings && <WorkstreamHeading data={data} w={w} wi={wi} className="py-2" />}
           {w.phases.map((p) => (
             <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
@@ -198,13 +199,23 @@ export function WorkstreamDashboard({ data, index }: { data: TransitionData; ind
           </select>
         </div>
       )}
-      {phone ? <PhaseCards data={data} workstreams={shown} /> : <PhaseGrid data={data} workstreams={shown} />}
-      {index === undefined && <div className="p-2"><AddButton request={() => transitionWorkstreamRequest(data)}>Add workstream</AddButton></div>}
+      {phone ? <PhaseCards data={data} workstreams={shown} headings={index === undefined} /> : <PhaseGrid data={data} workstreams={shown} headings={index === undefined} />}
+      {index === undefined
+        ? <div className="p-2"><AddButton request={() => transitionWorkstreamRequest(data)}>Add workstream</AddButton></div>
+        : data.dashboard[index] && data.dashboard[index].phases.length < TRANSITION_PHASES.length && (
+          <div className="p-2"><AddButton request={() => phaseRequest(data, index)}>Add a phase</AddButton></div>
+        )}
     </>
   )
 }
 
 type RaidRow = RaidItem & { rowId: string; index: number }
+
+/** Premera must act on this item (counted in the tab's "Premera Attention required"). */
+const ActionTag = ({ r }: { r: RaidItem }) =>
+  r.premeraActionRequired && !raidDone(r)
+    ? <span className="ml-1.5 inline-block rounded bg-red-600 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white align-middle whitespace-nowrap">Action required</span>
+    : null
 type Replies = { counts: Record<string, number>; open: (t: ReplyTarget) => void }
 
 /** Thumbs and the reply thread for a RAID item (only items with an id: the bundled sample has none). */
@@ -235,7 +246,7 @@ function RaidCards({ data, rows, replies }: { data: TransitionData; rows: RaidRo
               <EditButton title="Edit RAID item" request={() => raidRequest(data, r.index)} />
             </span>
           </div>
-          <div className="text-sm text-slate-800 break-words">{r.description}<VisibleToPremera flagged={r.needsPremeraAttention} /></div>
+          <div className="text-sm text-slate-800 break-words">{r.description}<ActionTag r={r} /><VisibleToPremera flagged={r.needsPremeraAttention} /></div>
           {r.mitigation.length > 0 && <div className="text-xs text-slate-600"><FullList items={r.mitigation} /></div>}
           <div className="text-xs text-slate-500">
             {r.owner || '—'} · Due {r.dueDate || '—'}<OverdueTag date={r.dueDate} done={raidDone(r)} />
@@ -261,7 +272,7 @@ export function RaidGrid({ data, workstream }: { data: TransitionData; workstrea
   const columns = useMemo<ColDef<RaidRow>[]>(() => [
     renderColumn<RaidRow>({ headerName: 'RAID', width: 80, cellClass: 'flex items-center justify-center font-semibold' }, (r) => r.type),
     renderColumn<RaidRow>({ headerName: 'Description', flex: 2, minWidth: 190 }, (r) => (
-      <Clamp title={r.description}>{r.description}<VisibleToPremera flagged={r.needsPremeraAttention} /></Clamp>
+      <Clamp title={r.description}><ActionTag r={r} />{' '}{r.description}<VisibleToPremera flagged={r.needsPremeraAttention} /></Clamp>
     )),
     { headerName: 'Mitigation Plan / Next Steps', flex: 2, minWidth: 190, valueGetter: (p) => p.data?.mitigation },
     { headerName: 'Owner', width: 140, valueGetter: (p) => p.data?.owner },

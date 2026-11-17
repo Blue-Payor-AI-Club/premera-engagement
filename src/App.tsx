@@ -1,12 +1,13 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import UstViewNotice from './components/UstViewNotice'
-import { X, BarChart3, MessageSquareText, ChevronRight, LayoutGrid, FileText } from 'lucide-react'
+import { X, BarChart3, MessageSquareText, ChevronRight, LayoutGrid, FileText, ClipboardCheck } from 'lucide-react'
 import './index.css'
 import ProgramLevel from './pages/ProgramLevel'
 import Feedback from './pages/Feedback'
 import Admin from './pages/Admin'
 import TransitionReport from './pages/TransitionReport'
+import Readiness from './pages/Readiness'
 import SuperAdmin from './pages/SuperAdmin'
 import Activity from './pages/Activity'
 import Login from './pages/Login'
@@ -379,13 +380,13 @@ function TopBar() {
   )
 }
 
-const NAV_ICON: Record<string, typeof LayoutGrid> = { '/program': LayoutGrid, '/feedback': MessageSquareText, '/report': FileText }
+const NAV_ICON: Record<string, typeof LayoutGrid> = { '/program': LayoutGrid, '/feedback': MessageSquareText, '/readiness': ClipboardCheck, '/report': FileText }
 
 /** Phones: a bottom tab bar, as in the mobile app (the top bar keeps the brand and the account menu). */
 function BottomNav() {
   return (
     <nav aria-label="Sections" className="md:hidden fixed inset-x-0 bottom-0 z-[9995] border-t border-slate-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-4">
         {NAV.map((n) => {
           const Icon = NAV_ICON[n.to] ?? LayoutGrid
           return (
@@ -434,6 +435,7 @@ function AuthenticatedApp() {
           {/* Risks & Issues is now each Program Level tab's RAID log; old links land there. */}
           <Route path="/risks" element={<Navigate to="/program" replace />} />
           <Route path="/feedback" element={<Feedback />} />
+          <Route path="/readiness" element={<PortalGate><Readiness /></PortalGate>} />
           <Route path="/report" element={<PortalGate><TransitionReport /></PortalGate>} />
           <Route path="/activity" element={<RequirePermission permission="audit:read"><Activity /></RequirePermission>} />
           <Route path="/admin" element={<RequirePermission permission="portal:write"><Admin /></RequirePermission>} />

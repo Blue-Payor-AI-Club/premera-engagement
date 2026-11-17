@@ -32,7 +32,7 @@ export const READINESS_GUIDE: { score: ReadinessScore; label: string; meaning: s
   { score: 6, label: 'Yet to start', meaning: 'Not yet begun', bg: '#D0D5D6', fg: '#1A1A1A' },
   { score: 5, label: 'Green', meaning: 'Complete, validated, sustainable', bg: '#0B4F55', fg: '#FFFFFF' },
   { score: 4, label: 'Light green', meaning: 'Complete, minor gaps with owners', bg: '#3C7F80', fg: '#FFFFFF' },
-  { score: 3, label: 'Amber', meaning: 'Partial; timeline risk', bg: '#D9A441', fg: '#FFFFFF' },
+  { score: 3, label: 'Amber', meaning: 'Partial; timeline risk', bg: '#D9A441', fg: '#1A1A1A' }, // dark text, as on the mobile slide (white on amber is hard to read)
   { score: 2, label: 'Red', meaning: 'Significant gaps; escalate', bg: '#C0504D', fg: '#FFFFFF' },
   { score: 1, label: 'Critical', meaning: 'Blocking the transition', bg: '#7A1F1F', fg: '#FFFFFF' },
 ]

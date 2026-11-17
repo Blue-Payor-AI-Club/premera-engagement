@@ -1,7 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import SlideHeader from '../components/SlideHeader'
 import StatusChip from '../components/transition/StatusChip'
-import ReadinessCard from '../components/transition/ReadinessCard'
 import { RaidGrid, WorkstreamDashboard } from '../components/transition/TransitionDashboard'
 import { PROGRAM_TABS, overallStatus, raidDone, sameName, statusCounts, tabWorkstream } from '../lib/programTabs'
 import { AddButton, EditButton } from '../components/Editor'
@@ -118,9 +117,6 @@ export default function ProgramLevel() {
         edit={() => transitionHeaderRequest(transition)}
         legend
       />
-
-      {/* Program-wide, above everything tab-specific (the same on every tab). */}
-      <ReadinessCard data={transition} />
 
       <KpiCards w={w} />
       <RaidBadges data={transition} name={w?.workstream} />

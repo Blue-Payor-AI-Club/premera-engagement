@@ -160,11 +160,13 @@ async function headerTour(page, who) {
   await caption(page, 'Transition Status Portal — the transition program status, shared by UST and Premera', 3200)
   const brand = page.getByText('Transition Status Portal', { exact: true })
   if (await visible(brand, 1000)) await point(page, brand, { hold: 1000 }) // the name hides on narrow windows
-  await caption(page, 'The header holds the three sections of the portal', 2400)
+  await caption(page, 'The header holds the sections of the portal', 2400)
   await point(page, page.getByRole('link', { name: 'Program Level' }).filter({ visible: true }), { hold: 600 })
   await caption(page, 'Program Level — the status of each operational area, one tab per area', 2600)
   await point(page, page.getByRole('link', { name: 'Feedback to UST' }).filter({ visible: true }), { hold: 600 })
   await caption(page, 'Feedback to UST — a direct line to the UST team, with every submission tracked', 2600)
+  await point(page, page.getByRole('link', { name: 'Readiness Score Card' }).filter({ visible: true }), { hold: 600 })
+  await caption(page, 'Readiness Score Card — what must be in place with Premera before the transition begins', 2600)
   await point(page, page.getByRole('link', { name: 'Transition Summary Report' }).filter({ visible: true }), { hold: 600 })
   await caption(page, 'Transition Summary Report — the program-wide view, in the familiar slide format', 2600)
   await caption(page, `On the right, the account menu: signed in as the ${who.title}, a Premera Stakeholder`, 1200)
@@ -179,7 +181,6 @@ async function programLevel(page, who, { full }) {
   await toTop(page)
   await caption(page, 'Program Level: the As-Of date and the status key sit at the top, so every colour reads the same way')
   await point(page, page.getByRole('group', { name: 'Status key' }), { hold: 1300 })
-  await readinessStep(page, { phone: false, full })
 
   const tabs = page.getByRole('tab')
   const names = await tabs.allTextContents()
@@ -232,25 +233,35 @@ async function programLevel(page, who, { full }) {
   }
 }
 
-/** The program-wide Transition Readiness Score Card, above the operational-area tabs. */
-async function readinessStep(page, { phone, full }) {
+/** Last stop: the Readiness Score Card, on its own menu item (top menu on the web, bottom tab bar on phones). */
+async function readiness(page, { phone }) {
+  await toTop(page)
+  await caption(page, 'Finally, the Readiness Score Card', 1400)
+  const nav = phone ? page.getByRole('navigation', { name: 'Sections' }) : page
+  await point(page, nav.getByRole('link', { name: 'Readiness Score Card' }).filter({ visible: true }), { click: true })
   const card = page.getByRole('region', { name: 'Transition Readiness Score Card' })
-  if (!(await visible(card, 2000))) return
-  await caption(page, 'First, the Transition Readiness Score Card: what must be in place with Premera before the transition begins', full ? 3200 : 2200)
-  await point(page, card.getByRole('heading', { name: 'Transition Readiness Score Card' }), { hold: 900 })
+  await card.waitFor()
+  await pause(1000)
+  await caption(page, 'What must be in place with Premera before the transition begins — one card for the whole program', 3000)
+  await point(page, page.getByRole('heading', { level: 1, name: 'Transition Readiness Score Card' }), { hold: 900 })
   const mix = card.getByLabel('Score mix')
   if (await visible(mix, 1000)) {
-    await caption(page, 'The header counts the 11 levers by colour, so the overall picture is clear at a glance', 1400)
-    await point(page, mix, { hold: 1400 })
+    await caption(page, 'The header counts the 11 levers by colour, so the overall picture is clear at a glance', 1600)
+    await point(page, mix, { hold: 1600 })
   }
-  if (!full) { await scrollBy(page, phone ? 500 : 350, 1400); return }
+  const guide = async () => {
+    await caption(page, 'The scoring guide: 5 Green down to 1 Critical, and 6 for levers not yet started', 1400)
+    await point(page, card.getByLabel('Scoring guide'), { hold: 2000 })
+  }
+  if (phone) await guide() // the mobile layout puts the guide first
   await caption(page, phone
-    ? 'Each lever is a card: its score square on the right, what is needed underneath'
-    : 'Each lever shows what is needed and its score from 1 to 6, with remarks where there are any', 1600)
-  await scrollBy(page, phone ? 380 : 260, 1600)
-  await caption(page, 'The scoring guide: 5 Green down to 1 Critical, and 6 for levers not yet started', 1400)
-  await point(page, card.getByLabel('Scoring guide'), { hold: 1600 })
+    ? 'Then one card per lever: its number, what is needed, and the score on the right'
+    : 'Each lever shows what is needed and its score from 1 to 6, with remarks where there are any', 1800)
+  await point(page, card.getByText(READINESS_FIRST), { hold: 1200 })
+  await scrollBy(page, phone ? 520 : 260, 1800)
+  if (!phone) await guide()
 }
+const READINESS_FIRST = 'Contract and scope'
 
 /** Thumbs and the reply thread on the first RAID item in `scope`. */
 async function raidFeedback(page, scope) {
@@ -339,7 +350,6 @@ async function phoneProgram(page, who, { full }) {
   await caption(page, 'The page title sits beside the As-Of date, with the status key right underneath', 1400)
   await point(page, page.getByRole('heading', { level: 1 }), { hold: 900 })
   await point(page, page.getByRole('group', { name: 'Status key' }), { hold: 1300 })
-  await readinessStep(page, { phone: true, full })
 
   const tabs = page.getByRole('tab')
   const names = await tabs.allTextContents()
@@ -413,7 +423,7 @@ async function phoneProgram(page, who, { full }) {
 /** The bottom tab bar, then the report and feedback on a phone. */
 async function phoneSections(page) {
   const bar = page.getByRole('navigation', { name: 'Sections' })
-  await caption(page, 'Sections live in a bottom tab bar, as in the app: Program, Feedback and Report', 1400)
+  await caption(page, 'Sections live in a bottom tab bar, as in the app: Program, Feedback, Readiness and Report', 1400)
   await point(page, bar, { hold: 1600 })
   await point(page, bar.getByRole('link', { name: 'Transition Summary Report' }), { click: true })
   await page.getByRole('heading', { level: 1, name: 'Transition Summary Report' }).waitFor()
@@ -460,6 +470,7 @@ export async function runWeb(page) {
   await caption(page, 'The Premera Director: the same portal, scoped to the one area they lead', 2800)
   await programLevel(page, DIRECTOR, { full: false })
   await report(page, { full: false })
+  await readiness(page, { phone: false })
   await toTop(page)
   await caption(page, 'Transition Status Portal — live status, shared decisions, one source of truth', 4000)
   await caption(page, '', 0)
@@ -474,6 +485,7 @@ export async function runPhone(page) {
   await signIn(page, DIRECTOR)
   await caption(page, 'The Premera Director on a phone: one area, the same layout', 2600)
   await phoneProgram(page, DIRECTOR, { full: false })
+  await readiness(page, { phone: true })
   await toTop(page)
   await caption(page, 'Transition Status Portal — on the desk or on the go', 4000)
   await caption(page, '', 0)

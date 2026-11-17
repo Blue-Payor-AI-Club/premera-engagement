@@ -173,8 +173,11 @@ test.describe('Set 3: report editing, replies and tabs', () => {
 })
 
 test.describe('Transition Readiness Score Card', () => {
-  test('UST scores a lever on the program-wide card; it is saved and Premera sees it read-only', async ({ page, request }) => {
+  test('UST scores a lever on the Readiness Score Card page; it is saved and Premera sees it read-only', async ({ page, request }) => {
     await signInAs(page, request, USERS.ust, '/program')
+    // Its own menu item; Program Level has no score card.
+    await expect(page.getByRole('region', { name: 'Transition Readiness Score Card' })).toHaveCount(0)
+    await page.getByRole('link', { name: 'Readiness Score Card' }).first().click()
     const card = page.getByRole('region', { name: 'Transition Readiness Score Card' })
     await card.getByRole('button', { name: 'Edit Access and tooling score' }).click()
     await dialog(page).getByLabel(/^Score/).selectOption('3')
@@ -184,7 +187,7 @@ test.describe('Transition Readiness Score Card', () => {
     await expect(card.getByLabel('Score 3: Amber')).toBeVisible()
     await expect(card.getByText('E2E: VPN tokens pending')).toBeVisible()
 
-    await signInAs(page, request, USERS.premera, '/program')
+    await signInAs(page, request, USERS.premera, '/readiness')
     const seen = page.getByRole('region', { name: 'Transition Readiness Score Card' })
     await expect(seen.getByText('E2E: VPN tokens pending')).toBeVisible()
     await expect(seen.getByRole('button', { name: /^Edit / })).toHaveCount(0)

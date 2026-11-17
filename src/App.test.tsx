@@ -50,6 +50,7 @@ describe('App shell — navigation by role', () => {
     expect(link(/program level/i)).toBeInTheDocument()
     expect(link(/feedback to ust/i)).toBeInTheDocument()
     expect(link(/transition summary report/i)).toBeInTheDocument()
+    expect(link(/readiness score card/i)).toBeInTheDocument()
     expect(link(/risks & issues/i)).toBeNull() // now each tab's RAID log
     expect(manage(/data sync/i)).toBeNull()
     expect(manage(/activity/i)).toBeNull()
@@ -57,7 +58,7 @@ describe('App shell — navigation by role', () => {
     expect(screen.getAllByText(/premera stakeholder/i).length).toBeGreaterThan(0)
     // Phones: a bottom tab bar with the three sections, as in the mobile app.
     const bottom = screen.getByRole('navigation', { name: 'Sections' })
-    expect(within(bottom).getAllByRole('link').map((a) => a.textContent)).toEqual(['Program', 'Feedback', 'Report'])
+    expect(within(bottom).getAllByRole('link').map((a) => a.textContent)).toEqual(['Program', 'Feedback', 'Readiness', 'Report'])
   })
 
   it('addresses the signed-in user by first name, and falls back to the email when there is no name', async () => {

@@ -9,10 +9,11 @@ export interface NavItem {
   permission?: Permission
 }
 
-/** The three sections every signed-in user sees. */
+/** The sections every signed-in user sees. */
 export const PRIMARY_NAV: NavItem[] = [
   { to: '/program', label: 'Program Level', short: 'Program' },
   { to: '/feedback', label: 'Feedback to UST', short: 'Feedback' },
+  { to: '/readiness', label: 'Readiness Score Card', short: 'Readiness' },
   { to: '/report', label: 'Transition Summary Report', short: 'Report' },
 ]
 

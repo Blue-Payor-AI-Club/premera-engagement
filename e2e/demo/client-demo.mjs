@@ -26,6 +26,9 @@ const SEND = process.env.DEMO_SEND === '1'
 const PHONE = process.argv.includes('--phone')
 // Unset: you choose the device yourself in DevTools during the start pause. Set: Playwright emulates it.
 const DEVICE = process.env.DEMO_DEVICE ?? ''
+// DevTools' touch emulation swallows Playwright's synthetic mouse clicks (they never complete), so in
+// that mode taps go straight to the element and the cursor dot is placed on it instead.
+const MANUAL_PHONE = PHONE && !DEVICE
 const SPEED = Number(process.env.DEMO_SPEED ?? 1) || 1
 const pause = (ms) => new Promise((r) => setTimeout(r, ms * SPEED))
 
@@ -86,7 +89,15 @@ async function point(page, locator, { click = false, hold = 900 } = {}) {
   await pause(300)
   const box = await el.boundingBox()
   if (!box) return
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 25 })
+  if (MANUAL_PHONE) {
+    await page.evaluate(([x, y]) => {
+      const dot = document.getElementById('demo-cursor')
+      if (dot) { dot.style.transition = 'left .5s ease, top .5s ease, transform .15s'; dot.style.left = `${x}px`; dot.style.top = `${y}px` }
+    }, [box.x + box.width / 2, box.y + box.height / 2])
+    await pause(500)
+  } else {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 25 })
+  }
   await el.evaluate((n) => {
     const prev = n.style.outline
     n.style.outline = '3px solid #f59e0b'
@@ -94,7 +105,17 @@ async function point(page, locator, { click = false, hold = 900 } = {}) {
     setTimeout(() => { n.style.outline = prev }, 1400)
   }).catch(() => {})
   await pause(hold)
-  if (click) await el.click()
+  if (!click) return
+  if (MANUAL_PHONE) {
+    await el.evaluate((n) => {
+      const dot = document.getElementById('demo-cursor')
+      if (dot) { dot.style.transform = 'scale(.7)'; setTimeout(() => { dot.style.transform = '' }, 180) }
+      n.focus?.()
+      n.click()
+    })
+  } else {
+    await el.click()
+  }
 }
 
 /** Smooth scroll (works on phones too, where there is no mouse wheel). */
@@ -126,7 +147,7 @@ async function signOut(page) {
   await toTop(page)
   await point(page, page.getByRole('button', { name: 'Account menu' }), { click: true, hold: 400 })
   await pause(500)
-  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await point(page, page.getByRole('menuitem', { name: 'Sign out' }), { click: true, hold: 200 })
   await page.getByPlaceholder('you@company.com').waitFor()
   await pause(800)
 }
@@ -158,6 +179,7 @@ async function programLevel(page, who, { full }) {
   await toTop(page)
   await caption(page, 'Program Level: the As-Of date and the status key sit at the top, so every colour reads the same way')
   await point(page, page.getByRole('group', { name: 'Status key' }), { hold: 1300 })
+  await readinessStep(page, { phone: false, full })
 
   const tabs = page.getByRole('tab')
   const names = await tabs.allTextContents()
@@ -208,6 +230,26 @@ async function programLevel(page, who, { full }) {
     if (await visible(tag, 1500)) await point(page, tag, { hold: 1200 })
     if (full) await raidFeedback(page, raid)
   }
+}
+
+/** The program-wide Transition Readiness Score Card, above the operational-area tabs. */
+async function readinessStep(page, { phone, full }) {
+  const card = page.getByRole('region', { name: 'Transition Readiness Score Card' })
+  if (!(await visible(card, 2000))) return
+  await caption(page, 'First, the Transition Readiness Score Card: what must be in place with Premera before the transition begins', full ? 3200 : 2200)
+  await point(page, card.getByRole('heading', { name: 'Transition Readiness Score Card' }), { hold: 900 })
+  const mix = card.getByLabel('Score mix')
+  if (await visible(mix, 1000)) {
+    await caption(page, 'The header counts the 11 levers by colour, so the overall picture is clear at a glance', 1400)
+    await point(page, mix, { hold: 1400 })
+  }
+  if (!full) { await scrollBy(page, phone ? 500 : 350, 1400); return }
+  await caption(page, phone
+    ? 'Each lever is a card: its score square on the right, what is needed underneath'
+    : 'Each lever shows what is needed and its score from 1 to 6, with remarks where there are any', 1600)
+  await scrollBy(page, phone ? 380 : 260, 1600)
+  await caption(page, 'The scoring guide: 5 Green down to 1 Critical, and 6 for levers not yet started', 1400)
+  await point(page, card.getByLabel('Scoring guide'), { hold: 1600 })
 }
 
 /** Thumbs and the reply thread on the first RAID item in `scope`. */
@@ -297,6 +339,7 @@ async function phoneProgram(page, who, { full }) {
   await caption(page, 'The page title sits beside the As-Of date, with the status key right underneath', 1400)
   await point(page, page.getByRole('heading', { level: 1 }), { hold: 900 })
   await point(page, page.getByRole('group', { name: 'Status key' }), { hold: 1300 })
+  await readinessStep(page, { phone: true, full })
 
   const tabs = page.getByRole('tab')
   const names = await tabs.allTextContents()
@@ -359,7 +402,7 @@ async function phoneProgram(page, who, { full }) {
         await point(page, box, { click: true, hold: 300 })
         await box.pressSequentially('On it — will confirm by Friday.', { delay: 50 * SPEED })
         await pause(1200)
-        if (SEND) await dialog.getByRole('button', { name: 'Send reply' }).click()
+        if (SEND) await point(page, dialog.getByRole('button', { name: 'Send reply' }), { click: true, hold: 300 })
         await page.keyboard.press('Escape')
         await pause(700)
       }
@@ -450,7 +493,7 @@ async function startPause(seconds, what) {
 async function main() {
   const headless = process.env.DEMO_HEADLESS === '1'
   // Manual phone mode: you pick the device in DevTools' device toolbar during the pause.
-  const manualPhone = PHONE && !DEVICE
+  const manualPhone = MANUAL_PHONE
   const wait = Number(process.env.DEMO_START_WAIT ?? (PHONE ? 15 : 10))
   const browser = await chromium.launch({
     headless,

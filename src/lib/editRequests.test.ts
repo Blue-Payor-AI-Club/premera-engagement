@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { TRANSITION_DATA } from '../data/transitionData'
-import { legacyRowRequest, raidRequest, issueRequest, phaseMilestones, phaseRequest, transitionWorkstreamRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
+import { readinessRequest, legacyRowRequest, raidRequest, issueRequest, phaseMilestones, phaseRequest, transitionWorkstreamRequest, milestoneRowRequest, normalizeDate, programMilestones, summaryLineRequest } from './editRequests'
 
 const doc = (): PortalData => structuredClone({ ...DEFAULT_PORTAL_DATA, transition: TRANSITION_DATA })
 
@@ -109,5 +109,17 @@ describe('edit requests', () => {
     const add = raidRequest(d.transition!)
     add.save(d, { ...add.value, description: 'new', mitigation: [] })
     expect(d.transition!.raid.at(-1)!.id).toBeTruthy()
+  })
+
+  it('a readiness lever saves its score and remarks; blank clears the score; the card always has all 11 levers', () => {
+    const d = doc()
+    const req = readinessRequest(d.transition!, 'access')
+    expect(req.fields.find((f) => f.key === 'score')!.options!.map((o) => o.value)).toEqual(['1', '2', '3', '4', '5', '6'])
+    req.save(d, { score: '3', remarks: ' VPN tokens pending ' })
+    const access = d.transition!.readiness!.find((r) => r.key === 'access')!
+    expect(access).toEqual({ key: 'access', score: 3, remarks: 'VPN tokens pending' })
+    expect(d.transition!.readiness).toHaveLength(11)
+    readinessRequest(d.transition!, 'access').save(d, { score: '', remarks: '' })
+    expect(d.transition!.readiness!.find((r) => r.key === 'access')).toEqual({ key: 'access', score: null })
   })
 })

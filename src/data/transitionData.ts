@@ -1,3 +1,4 @@
+import type { ReadinessItem } from './readiness'
 import type { StatusKey } from './status'
 import type { MilestoneRow } from './portalData'
 
@@ -96,6 +97,8 @@ export interface TransitionData {
   summary: ExecutiveSummaryData
   dashboard: TransitionWorkstream[]
   raid: RaidItem[]
+  /** Transition Readiness Score Card: program-wide, one entry per lever (data/readiness.ts). */
+  readiness?: ReadinessItem[]
 }
 
 

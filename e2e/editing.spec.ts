@@ -171,3 +171,22 @@ test.describe('Set 3: report editing, replies and tabs', () => {
     expect(Math.abs(last.x + last.width - (box.x + box.width))).toBeLessThanOrEqual(2)
   })
 })
+
+test.describe('Transition Readiness Score Card', () => {
+  test('UST scores a lever on the program-wide card; it is saved and Premera sees it read-only', async ({ page, request }) => {
+    await signInAs(page, request, USERS.ust, '/program')
+    const card = page.getByRole('region', { name: 'Transition Readiness Score Card' })
+    await card.getByRole('button', { name: 'Edit Access and tooling score' }).click()
+    await dialog(page).getByLabel(/^Score/).selectOption('3')
+    await dialog(page).getByLabel('Remarks').fill('E2E: VPN tokens pending')
+    await dialog(page).getByRole('button', { name: 'Save' }).click()
+    await expect(dialog(page)).toBeHidden()
+    await expect(card.getByLabel('Score 3: Amber')).toBeVisible()
+    await expect(card.getByText('E2E: VPN tokens pending')).toBeVisible()
+
+    await signInAs(page, request, USERS.premera, '/program')
+    const seen = page.getByRole('region', { name: 'Transition Readiness Score Card' })
+    await expect(seen.getByText('E2E: VPN tokens pending')).toBeVisible()
+    await expect(seen.getByRole('button', { name: /^Edit / })).toHaveCount(0)
+  })
+})

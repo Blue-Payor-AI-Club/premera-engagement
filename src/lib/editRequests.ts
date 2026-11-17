@@ -4,6 +4,7 @@ import { uid, type IssueRow, type MilestoneRow, type MilestoneSection, type Port
 import { LEGEND_ORDER, STATUS, type StatusKey } from '../data/status'
 import { TRANSITION_PHASES, type PhaseRow, type RaidItem, type TransitionContact, type TransitionData } from '../data/transitionData'
 import { WORKSTREAM_ICON_LABELS } from '../data/workstreamIcons'
+import { READINESS_GUIDE, READINESS_LEVERS, completeReadiness, type ReadinessLeverKey, type ReadinessScore } from '../data/readiness'
 
 
 // ─── Editor form model (rendered by components/Editor.tsx) ────────────────────
@@ -468,6 +469,31 @@ export function legacyRowRequest(t: TransitionData, wsIndex: number): EditReques
       if (p2) p2.end = str(v.obEnd)
       const p3 = phase('Transition / KT', !!(str(v.ktStatus) || str(v.ktStart) || str(v.ktEnd)))
       if (p3) Object.assign(p3, { status: status(v.ktStatus), start: str(v.ktStart), end: str(v.ktEnd) })
+    },
+  }
+}
+
+/** One lever of the Transition Readiness Score Card: its score (blank = not scored) and remarks. */
+export function readinessRequest(t: TransitionData, key: ReadinessLeverKey): EditRequest {
+  const lever = READINESS_LEVERS.find((l) => l.key === key)!
+  const item = completeReadiness(t.readiness).find((r) => r.key === key)!
+  return {
+    label: `readiness lever ${quote(lever.label)}`,
+    isNew: false,
+    fields: [
+      {
+        key: 'score', label: 'Score (blank = not scored yet)', type: 'select',
+        options: [...READINESS_GUIDE].sort((a, b) => a.score - b.score).map((g) => ({ value: String(g.score), label: `${g.score} — ${g.label}: ${g.meaning}` })),
+      },
+      { key: 'remarks', label: 'Remarks', type: 'textarea' },
+    ],
+    value: { score: item.score ? String(item.score) : '', remarks: item.remarks },
+    save: (d, v) => {
+      const list = completeReadiness(tr(d).readiness)
+      const i = list.findIndex((r) => r.key === key)
+      const remarks = str(v.remarks).trim()
+      list[i] = { key, score: str(v.score) ? (Number(v.score) as ReadinessScore) : null, ...(remarks ? { remarks } : {}) }
+      tr(d).readiness = list
     },
   }
 }

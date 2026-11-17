@@ -186,6 +186,7 @@ interface TransitionBlock {      // only RAID items carry ids (votes + replies);
     }[]
   }[]
   raid: { id?: string; type: 'R' | 'A' | 'I' | 'D'; description: string; mitigation: string[]; owner: string; dueDate: string; status: string; workstream?: string }[]  // workstream = its Program Level tab; blank = program-wide
+  readiness?: { key: 'contract' | 'governance' | 'volume' | 'documents' | 'ktPlan' | 'access' | 'staffing' | 'sla' | 'security' | 'timeline' | 'risk'; score: 1 | 2 | 3 | 4 | 5 | 6 | null; remarks?: string }[]  // Transition Readiness Score Card, program-wide: 6 = Yet to start, 5 = Green … 1 = Critical; null = not scored
 }
 ```
 
@@ -195,7 +196,7 @@ fills in the default, and every `GET /v1/portal` response includes it. It is edi
 (`Transition As-Of Date`, `Transition Overall Status`, `Transition Overall Summary`). Those sheets and Meta rows are
 optional on import: a workbook without them keeps the stored Transition data and returns an
 `OPTIONAL_SHEET_MISSING` warning per absent sheet. `TransitionPhases` carries the workstream-level `Tower`,
-`Overall Status` and `Overall Status Summary` columns (filled on a workstream's first row); `TransitionRaid` has `Workstream` and `ID` columns (layout v6; a blank ID is a new item, and a row whose ID is missing keeps the id of the stored item with the same description). (A workbook from before the phase layout has a
+`Overall Status` and `Overall Status Summary` columns (filled on a workstream's first row); `TransitionRaid` has `Workstream` and `ID` columns (layout v6; a blank ID is a new item, and a row whose ID is missing keeps the id of the stored item with the same description). `TransitionRaid` also has `Premera Action Required` (v7). `TransitionReadiness` (v8) has one row per lever: # and What is needed are reference text, Lever and Score (1-6) are dropdowns, plus Remarks; a workbook without the sheet keeps the stored score card. (A workbook from before the phase layout has a
 `TransitionDashboard` sheet instead of `TransitionPhases`; it is ignored and the stored dashboard kept.)
 
 ### Status enum reference (`src/data/status.ts`)

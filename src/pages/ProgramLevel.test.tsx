@@ -9,6 +9,7 @@ import { PortalDataContext } from '../context/PortalDataContext'
 import { AuthStub } from '../test/auth'
 import { DEFAULT_PORTAL_DATA, type PortalData } from '../data/portalData'
 import { TRANSITION_DATA, type TransitionData } from '../data/transitionData'
+import { READINESS_LEVERS } from '../data/readiness'
 
 function renderPage(data: PortalData = DEFAULT_PORTAL_DATA, tabs?: string[]) {
   return render(
@@ -116,6 +117,35 @@ describe('/program — one tab per operational area', () => {
   it('falls back to the bundled Transition content when the API response has no transition block', async () => {
     renderPage({ ...DEFAULT_PORTAL_DATA, transition: undefined })
     expect(screen.getByRole('region', { name: 'Transition Program Summary - Service Desk and ITOC' })).toBeInTheDocument()
+  })
+})
+
+describe('/program — Transition Readiness Score Card', () => {
+  const SLIDE = [3, 4, 5, 4, 4, 3, 4, 3, 6, 4, 4] as const
+  const scored: TransitionData = { ...synced, readiness: READINESS_LEVERS.map((l, i) => ({ key: l.key, score: SLIDE[i], ...(i === 0 ? { remarks: 'MSA signed' } : {}) })) }
+
+  it('sits above the tab-specific content, with every lever, its score, the colour mix and the guide', () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: scored })
+    const card = screen.getByRole('region', { name: 'Transition Readiness Score Card' })
+    expect(card.compareDocumentPosition(screen.getByRole('group', { name: 'Status counts' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(card.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    for (const l of READINESS_LEVERS) expect(within(card).getByText(l.label)).toBeInTheDocument()
+    expect(within(card).getByLabelText('Score 6: Yet to start')).toBeInTheDocument()
+    expect(within(card).getByLabelText('Score mix')).toHaveTextContent('1 Green · 6 Light green · 3 Amber · 1 Yet to start')
+    expect(within(card).getByText('MSA signed')).toBeInTheDocument()
+    expect(within(card).getByLabelText('Scoring guide')).toHaveTextContent('Blocking the transition')
+    expect(within(card).queryByRole('button', { name: /^Edit / })).toBeNull() // Premera reads only
+  })
+
+  it('stays the same on every tab', async () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: scored })
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Claims Operations (100-400)' }))
+    expect(within(screen.getByRole('region', { name: 'Transition Readiness Score Card' })).getByLabelText('Score mix')).toHaveTextContent('1 Green')
+  })
+
+  it('says so when nothing is scored yet', () => {
+    renderPage({ ...DEFAULT_PORTAL_DATA, transition: synced })
+    expect(within(screen.getByRole('region', { name: 'Transition Readiness Score Card' })).getByText('Readiness not scored yet.')).toBeInTheDocument()
   })
 })
 

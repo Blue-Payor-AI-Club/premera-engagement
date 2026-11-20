@@ -7,6 +7,11 @@ services:
       - "443:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # nginx proxies /api to the premeraapi container by name, so join the API project's network.
+    networks: [default, api]
     restart: unless-stopped
+
+networks:
+  api:
+    external: true
+    name: api_default
